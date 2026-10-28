@@ -165,10 +165,12 @@ private fun DrawScope.verticalBubble(
 }
 
 private fun DrawScope.caption(centerX: Float, top: Float, text: String, char: Float, paint: Paint) {
-    paint.textSize = char
+    // Oversized for reliable OCR recall on-device: the caption is the only
+    // horizontal text on the page and must never be a borderline detection.
+    paint.textSize = char * 1.3f
     val textWidth = paint.measureText(text)
-    val width = textWidth + char * 1.6f
-    val height = char * 1.7f
+    val width = textWidth + char * 2.2f
+    val height = char * 2.3f
     val left = centerX - width / 2f
     drawRect(Color.White, Offset(left, top), Size(width, height))
     drawRect(Color(InkPaper.INK), Offset(left, top), Size(width, height), style = Stroke(width = 2.dp.toPx()))

@@ -111,15 +111,6 @@ jobs:
           script: |
             bash .github/scripts/emulator-check.sh
 
-      - name: Pull test captures
-        if: always()
-        run: |
-          mkdir -p ci-shots
-          for f in serifu-shot-0.png serifu-shot-1.png serifu-shot-2.png; do
-            adb pull /sdcard/Download/$f ci-shots/$f || true
-          done
-          ls -la ci-shots || true
-
       - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@v4

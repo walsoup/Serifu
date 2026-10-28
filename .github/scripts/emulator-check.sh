@@ -18,6 +18,11 @@ adb shell pm list packages | grep app.serifu || { echo "INSTALL VERIFY FAILED"; 
 adb shell input keyevent KEYCODE_WAKEUP || true
 adb shell wm dismiss-keyguard || true
 adb shell am instrument -w -e class app.serifu.PipelineOnTestPageTest app.serifu.test/androidx.test.runner.AndroidJUnitRunner
+mkdir -p ci-shots
+for f in serifu-shot-0.png serifu-shot-1.png serifu-shot-2.png; do
+  adb pull /sdcard/Download/$f ci-shots/$f || true
+done
+ls -la ci-shots || true
 
 for attempt in 1 2 3; do
   adb shell am start -W -n app.serifu/.ui.MainActivity || true
