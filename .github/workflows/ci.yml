@@ -11,6 +11,8 @@ jobs:
     name: Build, test, lint
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      ANDROID_HOME: /opt/hostedtoolcache/android/1.5.0/x64
     steps:
       - uses: actions/checkout@v4
 
@@ -20,8 +22,19 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Locate preinstalled Android SDK
+        id: sdk
+        run: |
+          SDK=""
+          for d in "$ANDROID_HOME" /usr/local/lib/android/sdk "$HOME/Android/Sdk"; do
+            if [ -n "$d" ] && [ -d "$d/platforms" ]; then SDK="$d"; break; fi
+          done
+          SDK="${SDK:-/usr/local/lib/android/sdk}"
+          echo "sdk=$SDK" >> "$GITHUB_OUTPUT"
+          echo "Using SDK at $SDK"
+
+      - name: Accept licences
+        run: yes | ${{ steps.sdk.outputs.sdk }}/cmdline-tools/latest/bin/sdkmanager --licenses >/dev/null 2>&1 || true
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -29,6 +42,8 @@ jobs:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
       - name: Build + unit tests + lint
+        env:
+          ANDROID_HOME: ${{ steps.sdk.outputs.sdk }}
         run: ./gradlew assembleDebug testDebugUnitTest :core:test lintDebug --console=plain --stacktrace
 
       - name: Upload reports
@@ -63,13 +78,26 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Locate preinstalled Android SDK
+        id: sdk
+        run: |
+          SDK=""
+          for d in "$ANDROID_HOME" /usr/local/lib/android/sdk "$HOME/Android/Sdk"; do
+            if [ -d "$d/platforms" ]; then SDK="$d"; break; fi
+          done
+          SDK="${SDK:-/usr/local/lib/android/sdk}"
+          echo "sdk=$SDK" >> "$GITHUB_OUTPUT"
+          echo "Using SDK at $SDK"
+
+      - name: Accept licences
+        run: yes | ${{ steps.sdk.outputs.sdk }}/cmdline-tools/latest/bin/sdkmanager --licenses >/dev/null 2>&1 || true
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
       - name: Build test APK
+        env:
+          ANDROID_HOME: ${{ steps.sdk.outputs.sdk }}
         run: ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --console=plain
 
       - name: Run on emulator and capture screens
@@ -83,9 +111,8 @@ jobs:
             adb shell am start -n app.serifu/.ui.MainActivity
             sleep 5
             adb exec-out screencap -p > screenshot-home.png
-            adb install -r app/build/outputs/apk/androidTest/app-debug-androidTest.apk
-            # Instrumented tests (add when present)
-            # adb shell am instrument -w app.serifu.test/androidx.test.runner.AndroidJUnitRunner
+            # Instrumentation tests once they exist
+            # adb shell am instrument -w app.serifu.debug.test/androidx.test.runner.AndroidJUnitRunner
 
       - name: Upload screenshots
         if: always()
