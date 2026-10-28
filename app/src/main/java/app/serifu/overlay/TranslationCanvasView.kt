@@ -60,6 +60,36 @@ class TranslationCanvasView(context: Context) : View(context) {
         invalidate()
     }
 
+    /** Per-bubble upgrade crossfade (plan.md 12.5): identical bubbles do not animate. */
+    fun crossfadeTo(next: RenderPage, debug: Boolean) {
+        val current = page
+        if (current == null || current.bubbles.isEmpty()) {
+            showPage(next, debug)
+            return
+        }
+        val currentTexts = current.bubbles.associate { it.id to it.layout.text.toString() }
+        val changed = next.bubbles.any { currentTexts[it.id] != it.layout.text.toString() }
+        if (!changed) {
+            // Same text everywhere: just refresh debug flags without animating.
+            this.page = next
+            this.debug = debug
+            invalidate()
+            return
+        }
+        this.page = next
+        this.debug = debug
+        refreshOrigin()
+        visibility = VISIBLE
+        animate().cancel()
+        alpha = 0.35f
+        animate()
+            .alpha(1f)
+            .setDuration(Tuning.UPGRADE_CROSSFADE_MS.toLong())
+            .setInterpolator(SHOW_INTERPOLATOR)
+            .start()
+        invalidate()
+    }
+
     fun peek(held: Boolean) {
         if (visibility != VISIBLE && !held) return
         animate().cancel()

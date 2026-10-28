@@ -281,7 +281,7 @@ class TranslationCoordinator(
             }
             is Effect.RecycleFrame -> takeFrame(effect.frameId)?.recycle()
             is Effect.ShowPage -> show(effect.pageId)
-            is Effect.CrossfadeTo -> show(effect.pageId)
+            is Effect.CrossfadeTo -> crossfade(effect.pageId)
             is Effect.CachePage -> Unit
             Effect.ClearPageCache -> {
                 synchronized(pages) { pages.clear() }
@@ -379,6 +379,7 @@ class TranslationCoordinator(
                         ocrMs = 0,
                         clusterMs = 0,
                         translateMlKitMs = 0,
+                        translateGemmaMs = 0,
                         layoutMs = 0,
                         totalMs = (clock() - started).coerceAtLeast(0),
                         cacheResult = "exact",
@@ -389,6 +390,35 @@ class TranslationCoordinator(
                     snapshotPrev(frame)
                     send(Event.PageReady(generation, rememberPage(exact)))
                     return
+                }
+                if (settings.quality != app.serifu.core.model.QualityMode.FAST) {
+                    val gemmaHit = pageCache.get(
+                        fingerprint,
+                        frame.rotation,
+                        settings.sourceLanguage,
+                        settings.targetLanguage,
+                        EngineId.GEMMA4_E2B,
+                    )
+                    if (gemmaHit != null) {
+                        if (generation != state.generation) return
+                        timings = timings.copy(
+                            captureMs = (fpStarted - started).coerceAtLeast(0),
+                            fingerprintMs = fingerprintMs,
+                            ocrMs = 0,
+                            clusterMs = 0,
+                            translateMlKitMs = 0,
+                            translateGemmaMs = 0,
+                            layoutMs = 0,
+                            totalMs = (clock() - started).coerceAtLeast(0),
+                            cacheResult = "exact",
+                            selfDiscarded = selfDiscarded,
+                        )
+                        publishTimings(timings)
+                        Log.d(TAG, "cache=exact(gemma) total=${timings.totalMs}ms")
+                        snapshotPrev(frame)
+                        send(Event.PageReady(generation, rememberPage(gemmaHit)))
+                        return
+                    }
                 }
                 if (!recaptured && presence().reader) {
                     val prevT = prevTiny
@@ -470,6 +500,7 @@ class TranslationCoordinator(
                     ocrMs = (ocrDone - ocrStarted).coerceAtLeast(0),
                     clusterMs = lettered.clusterMs,
                     translateMlKitMs = lettered.translateMs,
+                    translateGemmaMs = lettered.translateGemmaMs,
                     layoutMs = lettered.layoutMs,
                     totalMs = (finished - started).coerceAtLeast(0),
                     cacheResult = cacheResult,
@@ -494,6 +525,31 @@ class TranslationCoordinator(
                     )
                     snapshotPrev(frame)
                     send(Event.PageReady(generation, rememberPage(page)))
+                    val upgrade = lettered.upgrade
+                    if (upgrade != null) {
+                        val upgradeRotation = frame.rotation
+                        scope.launch(Dispatchers.Default) {
+                            val upgraded = try {
+                                upgrade.invoke()
+                            } catch (_: CancellationException) {
+                                return@launch
+                            } catch (_: Throwable) {
+                                return@launch
+                            } ?: return@launch
+                            if (generation != state.generation) return@launch
+                            pageCache.put(
+                                fingerprint,
+                                upgradeRotation,
+                                settings.sourceLanguage,
+                                settings.targetLanguage,
+                                EngineId.GEMMA4_E2B,
+                                upgraded.page,
+                            )
+                            timings = timings.copy(translateGemmaMs = upgraded.translateGemmaMs)
+                            publishTimings(timings)
+                            send(Event.UpgradeReady(generation, rememberPage(upgraded.page)))
+                        }
+                    }
                 }
                 return
             }
@@ -505,11 +561,35 @@ class TranslationCoordinator(
     private fun show(pageId: Long) {
         val showing = state.phase as? Phase.Showing ?: return
         if (showing.pageId != pageId) return
+        showCurrent(pageId)
+    }
+
+    private fun crossfade(pageId: Long) {
+        val showing = state.phase as? Phase.Showing ?: return
+        if (showing.pageId != pageId) {
+            // The upgrade arrived for a superseded generation; still update the
+            // last-shown bookkeeping but do not animate a stale page in.
+            val page = synchronized(pages) { pages[pageId] }
+            if (page != null) {
+                lastShownPage = page
+                shownTexts = page.bubbles.map { it.layout.text.toString() }
+                previousLines = page.sourceLines.take(Tuning.PREVIOUS_PAGE_CONTEXT_LINES)
+            }
+            return
+        }
+        showCurrent(pageId, crossfade = true)
+    }
+
+    private fun showCurrent(pageId: Long, crossfade: Boolean = false) {
         val page = synchronized(pages) { pages[pageId] } ?: return
         lastShownPage = page
         shownTexts = page.bubbles.map { it.layout.text.toString() }
         previousLines = page.sourceLines.take(Tuning.PREVIOUS_PAGE_CONTEXT_LINES)
-        overlays.canvas.showPage(page, settings.debugOverlay)
+        if (crossfade) {
+            overlays.canvas.crossfadeTo(page, settings.debugOverlay)
+        } else {
+            overlays.canvas.showPage(page, settings.debugOverlay)
+        }
     }
 
     private fun syncChrome() {

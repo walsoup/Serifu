@@ -36,11 +36,11 @@ data class PageTranslationResult(
     val byId: Map<Int, String>,
 )
 
-interface TranslationEngine {
+interface TranslationEngine : AutoCloseable {
     val id: EngineId
     suspend fun availability(source: SourceLanguage, target: String): EngineAvailability
     suspend fun translatePage(request: PageTranslationRequest): PageTranslationResult
-    fun close()
+    override fun close()
 }
 
 object CharBudget {

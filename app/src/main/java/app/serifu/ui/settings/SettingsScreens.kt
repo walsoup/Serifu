@@ -1,7 +1,10 @@
 package app.serifu.ui.settings
 
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -19,6 +22,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
@@ -37,6 +41,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
 import app.serifu.R
 import app.serifu.SerifuApp
 import app.serifu.core.Tuning
@@ -46,6 +52,10 @@ import app.serifu.core.model.QualityMode
 import app.serifu.core.model.SfxMode
 import app.serifu.core.model.SourceLanguage
 import app.serifu.core.model.TargetLanguage
+import app.serifu.ml.DeviceCapability
+import app.serifu.ml.GemmaModelDownloader
+import app.serifu.ml.GemmaTranslationEngine
+import app.serifu.ml.ModelCatalog
 import app.serifu.overlay.SerifuFonts
 import app.serifu.settings.KnownReaders
 import app.serifu.ui.components.LaunchableApp
@@ -427,16 +437,93 @@ fun EngineScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
                 style = Serifu.type.bodySecondary,
                 color = c.textSecondary,
             )
+        }
+        Spacer(Modifier.height(12.dp))
+        GemmaRow(viewModel)
+        Spacer(Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun GemmaRow(viewModel: HomeViewModel) {
+    val context = LocalContext.current
+    val c = Serifu.colors
+    val gate = remember { DeviceCapability.check(context) }
+    val workInfos by WorkManager.getInstance(context)
+        .getWorkInfosForUniqueWorkFlow(GemmaModelDownloader.WORK_NAME)
+        .collectAsStateWithLifecycle(initialValue = emptyList())
+    val running = workInfos.firstOrNull()?.let {
+        it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.ENQUEUED
+    } == true
+    val progress = workInfos.firstOrNull()?.progress
+    val done = progress?.getLong(GemmaModelDownloader.PROGRESS_DONE, 0L) ?: 0L
+    val total = progress?.getLong(GemmaModelDownloader.PROGRESS_TOTAL, ModelCatalog.EXPECTED_BYTES) ?: ModelCatalog.EXPECTED_BYTES
+    val installed = remember(running) { ModelCatalog.isComplete(context) }
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) {
+            Thread {
+                try {
+                    context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                } catch (_: Exception) {
+                }
+                GemmaTranslationEngine(context).use { engine -> engine.importSafFile(uri) }
+            }.start()
+        }
+    }
+
+    val stateText = when {
+        installed -> stringResource(R.string.gemma_state_ready)
+        running -> stringResource(R.string.gemma_downloading_state, formatMb(done), formatMb(total))
+        else -> stringResource(R.string.gemma_state_missing, stringResource(R.string.gemma_size))
+    }
+    MangaPanel {
+        Text("Gemma 4 E2B", style = Serifu.type.title, color = c.text)
+        Spacer(Modifier.height(4.dp))
+        Text(stateText, style = Serifu.type.bodySecondary, color = c.textSecondary)
+        if (running) {
+            Spacer(Modifier.height(8.dp))
+            LinearProgressIndicator(
+                progress = { if (total > 0) (done.toFloat() / total).coerceIn(0f, 1f) else 0f },
+                modifier = Modifier.fillMaxWidth(),
+                color = c.primary,
+                trackColor = c.inactive,
+            )
+        }
+        if (!gate.supported && !installed) {
             Spacer(Modifier.height(8.dp))
             Text(
-                stringResource(R.string.gemma_body),
+                stringResource(R.string.gemma_unsupported_title) + ": " + (gate.reason ?: ""),
                 style = Serifu.type.caption,
                 color = c.muted,
             )
         }
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (!installed && gate.supported && !running) {
+                Pill(
+                    text = stringResource(R.string.gemma_install),
+                    selected = true,
+                    onClick = { GemmaModelDownloader.enqueue(context, wifiOnly = true) },
+                )
+            }
+            if (!installed && !running) {
+                Pill(
+                    text = stringResource(R.string.gemma_import),
+                    selected = false,
+                    onClick = { importLauncher.launch("*/*") },
+                )
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            stringResource(R.string.gemma_body),
+            style = Serifu.type.caption,
+            color = c.muted,
+        )
     }
 }
+
+private fun formatMb(bytes: Long): String = "${bytes / 1_000_000} MB"
 
 @Composable
 fun DebugScreen(viewModel: HomeViewModel, onBack: () -> Unit) {

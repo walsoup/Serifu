@@ -21,7 +21,11 @@ import app.serifu.capture.ScreenCapturer
 import app.serifu.coordinator.PagePipeline
 import app.serifu.coordinator.TranslationCoordinator
 import app.serifu.core.coordinator.Event
+import app.serifu.ml.GemmaModelDownloader
+import app.serifu.ml.GemmaTranslationEngine
 import app.serifu.ml.MlKitTranslationEngine
+import app.serifu.ml.ModelCatalog
+import app.serifu.core.model.QualityMode
 import app.serifu.ml.OcrEngine
 import app.serifu.overlay.LetteringRenderer
 import app.serifu.overlay.OverlayManager
@@ -40,6 +44,7 @@ class SerifuAccessibilityService : AccessibilityService() {
     private var scope = CoroutineScope(sessionJob + Dispatchers.Main.immediate)
     private var ocr = OcrEngine()
     private lateinit var translator: MlKitTranslationEngine
+    private var gemma: GemmaTranslationEngine? = null
     private var capturer = ScreenCapturer(this, overlays, FrameConverter())
     private var loop: TranslationCoordinator? = null
     private var screenReceiver: ScreenStateReceiver? = null
@@ -58,13 +63,18 @@ class SerifuAccessibilityService : AccessibilityService() {
         translator = MlKitTranslationEngine(
             wifiOnly = { app.settingsRepository.settings.value?.wifiOnlyDownloads != false },
         )
+        gemma = GemmaTranslationEngine(
+            this,
+            diskCacheEnabled = { app.settingsRepository.settings.value?.llmDiskCache != false },
+        )
+        val gemmaEngine = gemma
         val reading = TranslationCoordinator(
             scope = scope,
             context = this,
             overlays = overlays,
             capturer = capturer,
             ocr = ocr,
-            pipeline = PagePipeline(this, translator, LetteringRenderer(this), ocr),
+            pipeline = PagePipeline(this, translator, LetteringRenderer(this), ocr, gemma = gemmaEngine),
             presence = { app.readerPresence.value },
             writeSettings = { transform ->
                 scope.launch { app.settingsRepository.update(transform) }
@@ -85,6 +95,16 @@ class SerifuAccessibilityService : AccessibilityService() {
         overlays.attach()
         scope.launch {
             app.settingsRepository.settings.filterNotNull().collect { reading.pushSettings(it) }
+        }
+        scope.launch {
+            // Auto-upgrade to progressive once the Gemma model lands on disk.
+            val current = app.settingsRepository.settings.value
+            if (current != null &&
+                current.quality == QualityMode.FAST &&
+                ModelCatalog.isComplete(this@SerifuAccessibilityService)
+            ) {
+                app.settingsRepository.update { it.copy(quality = QualityMode.BEST_PROGRESSIVE) }
+            }
         }
         val receiver = ScreenStateReceiver(
             onScreenOff = {
@@ -204,6 +224,19 @@ class SerifuAccessibilityService : AccessibilityService() {
         manager.notify(PERMISSION_NOTE, notification)
     }
 
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) {
+            gemma?.unloadNow()
+            loop?.send(app.serifu.core.coordinator.Event.ConfigurationChanged)
+        }
+        if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL) {
+            ocr.close()
+            ocr = OcrEngine()
+            translator.close()
+        }
+    }
+
     private fun stopSession() {
         if (!started) return
         started = false
@@ -218,6 +251,8 @@ class SerifuAccessibilityService : AccessibilityService() {
         overlays.detach()
         ocr.close()
         translator.close()
+        gemma?.close()
+        gemma = null
         capturer.close()
         sessionJob.cancel()
         loop = null

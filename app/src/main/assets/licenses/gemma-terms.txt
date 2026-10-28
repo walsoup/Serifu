@@ -1,0 +1,19 @@
+Gemma Terms of Use (gemma-4-E2B-it)
+====================================
+
+The Gemma 4 E2B instruction-tuned model is distributed by Google under
+the Gemma Terms of Use:
+
+    https://ai.google.dev/gemma/terms
+
+Serifu downloads the `.litertlm` build published by the
+`litert-community` organization on Hugging Face
+(`litert-community/gemma-4-E2B-it-litert-lm`, file
+`gemma-4-E2B-it-gpu.litertlm`), which is derived from
+`google/gemma-4-E2B-it` and is subject to the same Gemma Terms of Use.
+Use of the model is also governed by the Hugging Face copy's
+Apache-2.0 licence file where present, and by the Google AI Edge
+LiteRT-LM runtime licence.
+
+The model runs entirely on-device. No prompts or page content are sent
+to Google, Hugging Face, or any other server by Serifu.

@@ -93,6 +93,7 @@ dependencies {
     implementation(libs.mlkit.ocr.zh)
     implementation(libs.mlkit.ocr.ko)
     implementation(libs.mlkit.translate)
+    implementation(libs.litertlm)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlin.test)
