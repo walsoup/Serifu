@@ -169,16 +169,24 @@ class PipelineOnTestPageTest {
 
     private var shotIndex = 0
 
-    /** Persists each capture under external files so CI can pull it as an artifact. */
+    /** Persists each capture where CI can pull it (internal + external). */
     private fun saveShot(bitmap: Bitmap) {
         try {
             val context = InstrumentationRegistry.getInstrumentation().targetContext
-            val dir = java.io.File(context.getExternalFilesDir("shots"), "")
-            dir.mkdirs()
-            val file = java.io.File(dir, "shot-${shotIndex++}.png")
-            file.outputStream().use { out ->
-                bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+            val dirs = listOfNotNull(
+                java.io.File(context.filesDir, "shots"),
+                context.getExternalFilesDir("shots"),
+            )
+            for (dir in dirs) {
+                try {
+                    dir.mkdirs()
+                    java.io.File(dir, "shot-${shotIndex}.png").outputStream().use { out ->
+                        bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+                    }
+                } catch (_: Exception) {
+                }
             }
+            shotIndex++
         } catch (_: Exception) {
         }
     }

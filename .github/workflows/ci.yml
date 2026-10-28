@@ -114,8 +114,12 @@ jobs:
       - name: Pull test captures
         if: always()
         run: |
-          adb pull /sdcard/Android/data/app.serifu/files/shots ci-shots || true
-          ls -la ci-shots || true
+          mkdir -p ci-shots
+          adb pull /sdcard/Android/data/app.serifu/files/shots ci-shots-sdcard || true
+          for f in shot-0.png shot-1.png shot-2.png; do
+            adb exec-out run-as app.serifu cat files/shots/$f > ci-shots/$f 2>/dev/null || true
+          done
+          ls -la ci-shots ci-shots-sdcard || true
 
       - name: Upload screenshots
         if: always()
