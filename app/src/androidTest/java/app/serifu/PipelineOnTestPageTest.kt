@@ -7,11 +7,9 @@ import android.os.Looper
 import android.view.PixelCopy
 import android.view.Window
 import androidx.test.core.app.ActivityScenario
-import androidx.test.espresso.Espresso.onView
-import androidx.test.espresso.action.ViewActions.swipeUp
-import androidx.test.espresso.matcher.ViewMatchers.isRoot
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.uiautomator.UiDevice
 import app.serifu.capture.CapturedFrame
 import app.serifu.capture.LumaPyramid
 import app.serifu.capture.VerticalInsets
@@ -86,7 +84,10 @@ class PipelineOnTestPageTest {
                 )
                 checkBubbles(captionPage)
 
-                onView(isRoot()).perform(swipeUp())
+                // UiAutomator swipe: works without window focus (Espresso's
+                // isRoot swipe needs focus this sluggish emulator never grants).
+                val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+                device.swipe(540, 1800, 540, 600, 40)
                 Thread.sleep(1500)
                 val (bottom, bottomLines) = letterVisibleScreen(scenario, pipeline, ocr)
                 assertNotNull("pipeline produced no page after scroll", bottom)
