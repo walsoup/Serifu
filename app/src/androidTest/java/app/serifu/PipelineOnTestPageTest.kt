@@ -67,9 +67,20 @@ class PipelineOnTestPageTest {
                     assertNotNull("pipeline produced no page", page)
                     val bubbles = page!!.bubbles
                     val byKind = bubbles.groupBy { it.kind }
-                    assertEquals("dialogue clusters", 6, byKind[BubbleKind.DIALOGUE]?.size ?: 0)
-                    assertEquals("caption boxes", 1, byKind[BubbleKind.CAPTION]?.size ?: 0)
-                    assertEquals("sfx tags", 1, byKind[BubbleKind.SFX]?.size ?: 0)
+                    val diag = buildString {
+                        append("lines=${lines.size}")
+                        append(" debugClusters=${page.debugClusters.size}")
+                        for (c in page.debugClusters) {
+                            append(" [cid=${c.id} kind=${c.kind} src=${c.sourceText.take(14)}]")
+                        }
+                        append(" bubbles=${bubbles.size}")
+                        for (b in bubbles) {
+                            append(" [bid=${b.id} kind=${b.kind} txt=${b.layout.text.toString().take(14)}]")
+                        }
+                    }
+                    assertEquals(diag, 6, byKind[BubbleKind.DIALOGUE]?.size ?: 0)
+                    assertEquals(diag, 1, byKind[BubbleKind.CAPTION]?.size ?: 0)
+                    assertEquals(diag, 1, byKind[BubbleKind.SFX]?.size ?: 0)
                     for (bubble in bubbles) {
                         assertFalse(
                             "furigana leaked into source text: ${bubble.sourceTextForDebug}",
