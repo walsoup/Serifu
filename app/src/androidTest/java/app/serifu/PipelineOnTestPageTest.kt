@@ -10,6 +10,8 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
+import androidx.test.uiautomator.UiScrollable
+import androidx.test.uiautomator.UiSelector
 import app.serifu.capture.CapturedFrame
 import app.serifu.capture.LumaPyramid
 import app.serifu.capture.VerticalInsets
@@ -84,10 +86,12 @@ class PipelineOnTestPageTest {
                 )
                 checkBubbles(captionPage)
 
-                // UiAutomator swipe: works without window focus (Espresso's
-                // isRoot swipe needs focus this sluggish emulator never grants).
+                // UiScrollable accessibility scroll: raw UiDevice.swipe gestures
+                // do not land on the Compose scroller on this emulator image.
                 val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
-                device.swipe(540, 1800, 540, 600, 40)
+                val scroller = UiScrollable(UiSelector().scrollable(true))
+                scroller.scrollForward()
+                device.waitForIdle()
                 Thread.sleep(1500)
                 val (bottom, bottomLines) = letterVisibleScreen(scenario, pipeline, ocr)
                 assertNotNull("pipeline produced no page after scroll", bottom)
