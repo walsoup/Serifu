@@ -169,22 +169,33 @@ class PipelineOnTestPageTest {
 
     private var shotIndex = 0
 
-    /** Persists each capture where CI can pull it (internal + external). */
+    /** Persists each capture where CI can pull it (internal + shared Downloads). */
     private fun saveShot(bitmap: Bitmap) {
         try {
             val context = InstrumentationRegistry.getInstrumentation().targetContext
-            val dirs = listOfNotNull(
-                java.io.File(context.filesDir, "shots"),
-                context.getExternalFilesDir("shots"),
-            )
-            for (dir in dirs) {
-                try {
-                    dir.mkdirs()
-                    java.io.File(dir, "shot-${shotIndex}.png").outputStream().use { out ->
+            try {
+                val dir = java.io.File(context.filesDir, "shots")
+                dir.mkdirs()
+                java.io.File(dir, "shot-${shotIndex}.png").outputStream().use { out ->
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+                }
+            } catch (_: Exception) {
+            }
+            try {
+                val values = android.content.ContentValues().apply {
+                    put(android.provider.MediaStore.Downloads.DISPLAY_NAME, "serifu-shot-${shotIndex}.png")
+                    put(android.provider.MediaStore.Downloads.MIME_TYPE, "image/png")
+                }
+                val uri = context.contentResolver.insert(
+                    android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                    values,
+                )
+                if (uri != null) {
+                    context.contentResolver.openOutputStream(uri)?.use { out ->
                         bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
                     }
-                } catch (_: Exception) {
                 }
+            } catch (_: Exception) {
             }
             shotIndex++
         } catch (_: Exception) {

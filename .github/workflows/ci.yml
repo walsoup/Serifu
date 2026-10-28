@@ -115,11 +115,10 @@ jobs:
         if: always()
         run: |
           mkdir -p ci-shots
-          adb pull /sdcard/Android/data/app.serifu/files/shots ci-shots-sdcard || true
-          for f in shot-0.png shot-1.png shot-2.png; do
-            adb exec-out run-as app.serifu cat files/shots/$f > ci-shots/$f 2>/dev/null || true
+          for f in serifu-shot-0.png serifu-shot-1.png serifu-shot-2.png; do
+            adb pull /sdcard/Download/$f ci-shots/$f || true
           done
-          ls -la ci-shots ci-shots-sdcard || true
+          ls -la ci-shots || true
 
       - name: Upload screenshots
         if: always()
