@@ -107,13 +107,41 @@ jobs:
           arch: x86_64
           profile: pixel_6
           disable-animations: true
-          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect
+          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -memory 6144
           script: |
             adb install -r app/build/outputs/apk/debug/app-debug.apk
-            adb shell am start -n app.serifu/.ui.MainActivity
-            sleep 5
+            for attempt in 1 2 3; do
+              adb shell am start -W -n app.serifu/.ui.MainActivity || true
+              sleep 12
+              FOCUS=$(adb shell dumpsys window | grep -m1 mCurrentFocus || true)
+              echo "attempt $attempt focus: $FOCUS"
+              case "$FOCUS" in
+                *app.serifu*) break ;;
+              esac
+              adb shell uiautomator dump /sdcard/window_dump.xml >/dev/null 2>&1 || true
+              adb pull /sdcard/window_dump.xml /tmp/dump.xml >/dev/null 2>&1 || true
+              TAP=$(python3 -c "
+            import xml.etree.ElementTree as ET
+            try:
+                root = ET.parse('/tmp/dump.xml').getroot()
+                for node in root.iter('node'):
+                    if node.get('text') == 'Wait':
+                        b = node.get('bounds', '').replace('][', ',').strip('[]').split(',')
+                        print((int(b[0]) + int(b[2])) // 2, (int(b[1]) + int(b[3])) // 2)
+                        break
+            except Exception:
+                pass
+            " || true)
+              if [ -n "$TAP" ]; then adb shell input tap $TAP; sleep 5; fi
+            done
             adb exec-out screencap -p > screenshot-home.png
             ls -la screenshot-home.png
+            FINAL=$(adb shell dumpsys window | grep -m1 mCurrentFocus || true)
+            echo "final focus: $FINAL"
+            case "$FINAL" in
+              *app.serifu*) ;;
+              *) echo "APP NOT FOREGROUND"; exit 1 ;;
+            esac
 
       - name: Upload screenshots
         if: always()
