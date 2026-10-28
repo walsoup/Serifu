@@ -9,9 +9,6 @@ import android.view.Window
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import androidx.test.uiautomator.UiDevice
-import androidx.test.uiautomator.UiScrollable
-import androidx.test.uiautomator.UiSelector
 import app.serifu.capture.CapturedFrame
 import app.serifu.capture.LumaPyramid
 import app.serifu.capture.VerticalInsets
@@ -86,18 +83,23 @@ class PipelineOnTestPageTest {
                 )
                 checkBubbles(captionPage)
 
-                // UiScrollable accessibility scroll: raw UiDevice.swipe gestures
-                // do not land on the Compose scroller on this emulator image.
-                val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
-                val scroller = UiScrollable(UiSelector().scrollable(true))
-                scroller.scrollForward()
-                device.waitForIdle()
-                Thread.sleep(1500)
-                val (bottom, bottomLines) = letterVisibleScreen(scenario, pipeline, ocr)
-                assertNotNull("pipeline produced no page after scroll", bottom)
-                val bottomByKind = bottom!!.bubbles.groupBy { it.kind }
-                assertEquals(diag(bottom, "bottom", bottomLines), 1, bottomByKind[BubbleKind.SFX]?.size ?: 0)
-                checkBubbles(bottom)
+                // Bottom of the page via a pre-scrolled launch: the rotated SFX
+                // lives in the last panel and gestures never reach the Compose
+                // scroller reliably on this emulator image.
+                val bottomIntent = android.content.Intent(
+                    InstrumentationRegistry.getInstrumentation().targetContext,
+                    TestPageActivity::class.java,
+                ).putExtra(TestPageActivity.EXTRA_START_BOTTOM, true)
+                val bottomScenario = ActivityScenario.launch<TestPageActivity>(bottomIntent)
+                try {
+                    val (bottom, bottomLines) = letterVisibleScreen(bottomScenario, pipeline, ocr)
+                    assertNotNull("pipeline produced no page at bottom", bottom)
+                    val bottomByKind = bottom!!.bubbles.groupBy { it.kind }
+                    assertEquals(diag(bottom, "bottom", bottomLines), 1, bottomByKind[BubbleKind.SFX]?.size ?: 0)
+                    checkBubbles(bottom)
+                } finally {
+                    bottomScenario.close()
+                }
             } finally {
                 translator.close()
                 ocr.close()
