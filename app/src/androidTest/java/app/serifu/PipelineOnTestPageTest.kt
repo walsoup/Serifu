@@ -118,6 +118,7 @@ class PipelineOnTestPageTest {
     ): Pair<RenderPage?, String> {
         val bitmap = captureWindow(scenario)
         try {
+            saveShot(bitmap)
             val frame = toFrame(bitmap)
             try {
                 val settings = Settings(sourceLanguage = SourceLanguage.JA, targetLanguage = "en")
@@ -164,6 +165,22 @@ class PipelineOnTestPageTest {
         assertTrue("PixelCopy timed out", latch.await(15, TimeUnit.SECONDS))
         assertEquals("PixelCopy failed", PixelCopy.SUCCESS, copyResult)
         return bitmap
+    }
+
+    private var shotIndex = 0
+
+    /** Persists each capture under external files so CI can pull it as an artifact. */
+    private fun saveShot(bitmap: Bitmap) {
+        try {
+            val context = InstrumentationRegistry.getInstrumentation().targetContext
+            val dir = java.io.File(context.getExternalFilesDir("shots"), "")
+            dir.mkdirs()
+            val file = java.io.File(dir, "shot-${shotIndex++}.png")
+            file.outputStream().use { out ->
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+            }
+        } catch (_: Exception) {
+        }
     }
 
     private fun toFrame(bitmap: Bitmap): CapturedFrame {

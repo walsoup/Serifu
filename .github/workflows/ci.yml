@@ -111,10 +111,18 @@ jobs:
           script: |
             bash .github/scripts/emulator-check.sh
 
+      - name: Pull test captures
+        if: always()
+        run: |
+          adb pull /sdcard/Android/data/app.serifu/files/shots ci-shots || true
+          ls -la ci-shots || true
+
       - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: screenshots
-          path: screenshot*.png
+          path: |
+            screenshot*.png
+            ci-shots/
           retention-days: 14
