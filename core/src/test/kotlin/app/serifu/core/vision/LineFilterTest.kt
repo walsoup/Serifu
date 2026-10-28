@@ -45,6 +45,23 @@ class LineFilterTest {
         assertEquals(listOf("見える", "信頼なし"), kept)
     }
 
-    private fun line(text: String, box: IntRect, confidence: Float = 0.9f) =
-        OcrLine(text, box, confidence, angleDeg = 0f, language = "ja", symbolBoxes = emptyList())
+    @Test
+    fun verticalTextIsNotRotatedButOffAxisIs() {
+        assertEquals(false, LineFilter.isOffAxis(0f))
+        assertEquals(false, LineFilter.isOffAxis(90f))
+        assertEquals(false, LineFilter.isOffAxis(-90f))
+        assertEquals(false, LineFilter.isOffAxis(180f))
+        assertEquals(true, LineFilter.isOffAxis(24f))
+        assertEquals(true, LineFilter.isOffAxis(45f))
+        assertEquals(true, LineFilter.isOffAxis(-30f))
+        val vertical = LineFilter.keep(
+            listOf(line("おはよう", IntRect(0, 0, 40, 400), angleDeg = 90f)),
+            1080, 1920, skipLatin = true, pill = null,
+        )
+        assertEquals(1, vertical.size)
+        assertEquals(false, vertical.single().rotated)
+    }
+
+    private fun line(text: String, box: IntRect, confidence: Float = 0.9f, angleDeg: Float = 0f) =
+        OcrLine(text, box, confidence, angleDeg = angleDeg, language = "ja", symbolBoxes = emptyList())
 }

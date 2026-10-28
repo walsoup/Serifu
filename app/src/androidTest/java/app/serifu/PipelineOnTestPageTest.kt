@@ -7,6 +7,9 @@ import android.os.Looper
 import android.view.PixelCopy
 import android.view.Window
 import androidx.test.core.app.ActivityScenario
+import androidx.test.espresso.Espresso.onView
+import androidx.test.espresso.action.ViewActions.swipeUp
+import androidx.test.espresso.matcher.ViewMatchers.isRoot
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import app.serifu.capture.CapturedFrame
@@ -20,6 +23,7 @@ import app.serifu.core.model.SourceLanguage
 import app.serifu.ml.MlKitTranslationEngine
 import app.serifu.ml.OcrEngine
 import app.serifu.overlay.LetteringRenderer
+import app.serifu.overlay.RenderPage
 import app.serifu.settings.Settings
 import app.serifu.ui.testpage.TestPageActivity
 import java.util.concurrent.CountDownLatch
@@ -44,66 +48,88 @@ class PipelineOnTestPageTest {
     fun testPageLettersCompletely() {
         val scenario = ActivityScenario.launch(TestPageActivity::class.java)
         try {
-            val bitmap = captureWindow(scenario)
+            val appContext = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext
+            val ocr = OcrEngine()
+            val translator = MlKitTranslationEngine(wifiOnly = { false })
+            val pipeline = PagePipeline(
+                appContext,
+                translator,
+                LetteringRenderer(appContext),
+                ocr,
+            )
             try {
-                val frame = toFrame(bitmap)
-                try {
-                    val appContext = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext
-                    val ocr = OcrEngine()
-                    val translator = MlKitTranslationEngine(wifiOnly = { false })
-                    val pipeline = PagePipeline(
-                        appContext,
-                        translator,
-                        LetteringRenderer(appContext),
-                        ocr,
-                    )
-                    val lines = runBlocking { ocr.recognize(frame.bitmap, SourceLanguage.JA) }
-                    assertFalse("OCR found no lines on the test page", lines.isEmpty())
-                    val settings = Settings(sourceLanguage = SourceLanguage.JA, targetLanguage = "en")
-                    val lettered = runBlocking {
-                        pipeline.letter(lines, frame, settings, null, emptyList()) { System.currentTimeMillis() }
-                    }
-                    val page = lettered.page
-                    assertNotNull("pipeline produced no page", page)
-                    val bubbles = page!!.bubbles
-                    val byKind = bubbles.groupBy { it.kind }
-                    val diag = buildString {
-                        append("lines=${lines.size}")
-                        append(" debugClusters=${page.debugClusters.size}")
-                        for (c in page.debugClusters) {
-                            append(" [cid=${c.id} kind=${c.kind} src=${c.sourceText.take(14)}]")
-                        }
-                        append(" bubbles=${bubbles.size}")
-                        for (b in bubbles) {
-                            append(" [bid=${b.id} kind=${b.kind} txt=${b.layout.text.toString().take(14)}]")
-                        }
-                    }
-                    assertEquals(diag, 6, byKind[BubbleKind.DIALOGUE]?.size ?: 0)
-                    assertEquals(diag, 1, byKind[BubbleKind.CAPTION]?.size ?: 0)
-                    assertEquals(diag, 1, byKind[BubbleKind.SFX]?.size ?: 0)
-                    for (bubble in bubbles) {
-                        assertFalse(
-                            "furigana leaked into source text: ${bubble.sourceTextForDebug}",
-                            bubble.sourceTextForDebug.contains("せんぱい"),
-                        )
-                        val text = bubble.layout.text.toString().trim()
-                        assertTrue("empty lettering for bubble ${bubble.id}", text.isNotEmpty())
-                        assertTrue(
-                            "layout overflows patch for bubble ${bubble.id}",
-                            bubble.layout.width <= bubble.patch.width() + 1f &&
-                                bubble.layout.height <= bubble.patch.height() + 1f,
-                        )
-                    }
-                    translator.close()
-                    ocr.close()
-                } finally {
-                    frame.recycle()
-                }
+                // Top of the page: six vertical dialogue bubbles plus the caption.
+                // The rotated SFX lives in the last panel, below the fold.
+                val top = letterVisibleScreen(scenario, pipeline, ocr)
+                assertNotNull("pipeline produced no page", top)
+                val topByKind = top!!.bubbles.groupBy { it.kind }
+                assertEquals(diag(top, "top"), 6, topByKind[BubbleKind.DIALOGUE]?.size ?: 0)
+                assertEquals(diag(top, "top"), 1, topByKind[BubbleKind.CAPTION]?.size ?: 0)
+                checkBubbles(top)
+
+                onView(isRoot()).perform(swipeUp())
+                Thread.sleep(1500)
+                val bottom = letterVisibleScreen(scenario, pipeline, ocr)
+                assertNotNull("pipeline produced no page after scroll", bottom)
+                val bottomByKind = bottom!!.bubbles.groupBy { it.kind }
+                assertEquals(diag(bottom, "bottom"), 1, bottomByKind[BubbleKind.SFX]?.size ?: 0)
+                checkBubbles(bottom)
             } finally {
-                if (!bitmap.isRecycled) bitmap.recycle()
+                translator.close()
+                ocr.close()
             }
         } finally {
             scenario.close()
+        }
+    }
+
+    private fun checkBubbles(page: RenderPage) {
+        for (bubble in page.bubbles) {
+            assertFalse(
+                "furigana leaked into source text: ${bubble.sourceTextForDebug}",
+                bubble.sourceTextForDebug.contains("せんぱい"),
+            )
+            val text = bubble.layout.text.toString().trim()
+            assertTrue("empty lettering for bubble ${bubble.id}", text.isNotEmpty())
+            assertTrue(
+                "layout overflows patch for bubble ${bubble.id}",
+                bubble.layout.width <= bubble.patch.width() + 1f &&
+                    bubble.layout.height <= bubble.patch.height() + 1f,
+            )
+        }
+    }
+
+    private fun diag(page: RenderPage, where: String): String = buildString {
+        append("$where bubbles=${page.bubbles.size}")
+        for (b in page.bubbles) {
+            append(" [bid=${b.id} kind=${b.kind} txt=${b.layout.text.toString().take(14)}]")
+        }
+        append(" debugClusters=${page.debugClusters.size}")
+        for (c in page.debugClusters) {
+            append(" [cid=${c.id} kind=${c.kind} src=${c.sourceText.take(14)}]")
+        }
+    }
+
+    private fun letterVisibleScreen(
+        scenario: ActivityScenario<TestPageActivity>,
+        pipeline: PagePipeline,
+        ocr: OcrEngine,
+    ): RenderPage? {
+        val bitmap = captureWindow(scenario)
+        try {
+            val frame = toFrame(bitmap)
+            try {
+                val settings = Settings(sourceLanguage = SourceLanguage.JA, targetLanguage = "en")
+                val lines = runBlocking { ocr.recognize(frame.bitmap, SourceLanguage.JA) }
+                assertFalse("OCR found no lines on the test page", lines.isEmpty())
+                return runBlocking {
+                    pipeline.letter(lines, frame, settings, null, emptyList()) { System.currentTimeMillis() }
+                }.page
+            } finally {
+                frame.recycle()
+            }
+        } finally {
+            if (!bitmap.isRecycled) bitmap.recycle()
         }
     }
 

@@ -38,8 +38,18 @@ object LineFilter {
                 line = line,
                 orientation = orientation,
                 charSize = charSizeOf(line, orientation),
-                rotated = abs(line.angleDeg) > Tuning.ROTATED_ANGLE_DEG,
+                rotated = isOffAxis(line.angleDeg),
             )
         }
+    }
+
+    /**
+     * True only for off-axis rotation (neither horizontal nor vertical).
+     * A ~90° text angle is normal upright tategaki for Japanese/Chinese,
+     * not rotated sound-effect lettering, so it must not route to SFX.
+     */
+    fun isOffAxis(angleDeg: Float): Boolean {
+        val axis = abs(angleDeg) % 180f
+        return axis > Tuning.ROTATED_ANGLE_DEG && abs(axis - 90f) > Tuning.ROTATED_ANGLE_DEG
     }
 }
