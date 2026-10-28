@@ -1,0 +1,102 @@
+// AGP 9.4.1 is the latest stable and supports compileSdk 36 (max API 37). It requires Gradle 9.6.0+.
+// Gradle is pinned to 9.7.0, the newest release Kotlin 2.4.21 fully supports.
+// Kotlin's table lists AGP through 9.3.1 as fully tested with 2.4.21; JetBrains allows newer AGP.
+// AGP 9 has built-in Kotlin: do NOT apply org.jetbrains.kotlin.android (it fails the build).
+plugins {
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
+}
+
+android {
+    namespace = "app.serifu"
+    // The spec pins compileSdk 36. Compose 1.12.1, Navigation 2.10.2 and core-ktx 1.19.1
+    // (the October 2026 stables) require compileSdk 37. targetSdk stays 36.
+    compileSdk = 37
+
+    defaultConfig {
+        applicationId = "app.serifu"
+        minSdk = 30
+        targetSdk = 36
+        versionCode = 1
+        versionName = "0.1.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    buildTypes {
+        debug {
+            ndk {
+                abiFilters += listOf("arm64-v8a", "x86_64")
+            }
+        }
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
+            ndk {
+                abiFilters += "arm64-v8a"
+            }
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    buildFeatures {
+        compose = true
+    }
+
+    lint {
+        abortOnError = true
+    }
+
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+    }
+}
+
+dependencies {
+    implementation(project(":core"))
+    implementation(project(":linen"))
+
+    implementation(platform(libs.compose.bom))
+    implementation(libs.compose.ui)
+    implementation(libs.compose.foundation)
+    implementation(libs.compose.material3)
+    implementation(libs.compose.ui.tooling.preview)
+    debugImplementation(libs.compose.ui.tooling)
+    debugImplementation(libs.compose.ui.test.manifest)
+
+    implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.datastore)
+    implementation(libs.androidx.work)
+    implementation(libs.androidx.dynamicanimation)
+    implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.kotlinx.coroutines.play.services)
+    implementation(libs.kotlinx.serialization.json)
+    implementation(libs.mlkit.ocr.ja)
+    implementation(libs.mlkit.ocr.zh)
+    implementation(libs.mlkit.ocr.ko)
+    implementation(libs.mlkit.translate)
+
+    testImplementation(libs.junit)
+    testImplementation(libs.kotlin.test)
+    testImplementation(libs.robolectric)
+    androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.espresso.core)
+}

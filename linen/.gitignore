@@ -1,0 +1,6 @@
+/build
+.gradle/
+.kotlin/
+.github/ci-host/build/
+.github/ci-host/showcase/build/
+.github/ci-host/local.properties

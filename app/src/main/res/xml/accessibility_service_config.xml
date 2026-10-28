@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  M1 device check is still open. Confirm on a phone that TYPE_VIEW_SCROLLED is
+  delivered with canRetrieveWindowContent="false" for Mihon's pager and webtoon
+  readers. If those events do not arrive, set canRetrieveWindowContent="true"
+  and still never call getSource() or getWindows(). Record the result in this comment.
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeViewScrolled|typeWindowStateChanged|typeWindowContentChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagRequestFilterKeyEvents"
+    android:canRequestFilterKeyEvents="true"
+    android:canRetrieveWindowContent="false"
+    android:canTakeScreenshot="true"
+    android:isAccessibilityTool="false"
+    android:notificationTimeout="50"
+    android:description="@string/a11y_service_description"
+    android:summary="@string/a11y_service_summary"
+    android:settingsActivity="app.serifu.ui.MainActivity" />

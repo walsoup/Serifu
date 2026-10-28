@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="paper">#F3EEE3</color>
+    <color name="ink">#16140F</color>
+    <color name="hanko">#C8322B</color>
+    <color name="paper_glyph">#F3EEE3</color>
+</resources>
