@@ -18,10 +18,17 @@ object BubbleClassifier {
         rotated: Boolean,
         charSizePx: Float,
         medianCharSizePx: Float,
+        orientation: Orientation,
     ): BubbleKind {
         if (rotated) return BubbleKind.SFX
         if (medianCharSizePx > 0f && charSizePx > Tuning.SFX_SIZE_FACTOR * medianCharSizePx) {
             return BubbleKind.SFX
+        }
+        if (orientation == Orientation.VERTICAL) {
+            // Upright tategaki is dialogue by default. Outline-adjacent OCR boxes
+            // inflate the ring noise and union, so neither a high ring deviation
+            // nor a missing region mask may reroute it to SFX or free text.
+            return BubbleKind.DIALOGUE
         }
         if (ringStddev >= Tuning.SFX_RING_STDDEV_MIN) return BubbleKind.SFX
         if (mask != null && ringStddev < Tuning.DIALOGUE_RING_STDDEV_MAX) {

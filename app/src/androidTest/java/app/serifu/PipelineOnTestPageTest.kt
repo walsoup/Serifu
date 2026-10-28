@@ -60,19 +60,19 @@ class PipelineOnTestPageTest {
             try {
                 // Top of the page: six vertical dialogue bubbles plus the caption.
                 // The rotated SFX lives in the last panel, below the fold.
-                val top = letterVisibleScreen(scenario, pipeline, ocr)
+                val (top, topLines) = letterVisibleScreen(scenario, pipeline, ocr)
                 assertNotNull("pipeline produced no page", top)
                 val topByKind = top!!.bubbles.groupBy { it.kind }
-                assertEquals(diag(top, "top"), 6, topByKind[BubbleKind.DIALOGUE]?.size ?: 0)
-                assertEquals(diag(top, "top"), 1, topByKind[BubbleKind.CAPTION]?.size ?: 0)
+                assertEquals(diag(top, "top", topLines), 6, topByKind[BubbleKind.DIALOGUE]?.size ?: 0)
+                assertEquals(diag(top, "top", topLines), 1, topByKind[BubbleKind.CAPTION]?.size ?: 0)
                 checkBubbles(top)
 
                 onView(isRoot()).perform(swipeUp())
                 Thread.sleep(1500)
-                val bottom = letterVisibleScreen(scenario, pipeline, ocr)
+                val (bottom, bottomLines) = letterVisibleScreen(scenario, pipeline, ocr)
                 assertNotNull("pipeline produced no page after scroll", bottom)
                 val bottomByKind = bottom!!.bubbles.groupBy { it.kind }
-                assertEquals(diag(bottom, "bottom"), 1, bottomByKind[BubbleKind.SFX]?.size ?: 0)
+                assertEquals(diag(bottom, "bottom", bottomLines), 1, bottomByKind[BubbleKind.SFX]?.size ?: 0)
                 checkBubbles(bottom)
             } finally {
                 translator.close()
@@ -99,7 +99,7 @@ class PipelineOnTestPageTest {
         }
     }
 
-    private fun diag(page: RenderPage, where: String): String = buildString {
+    private fun diag(page: RenderPage, where: String, lineDiag: String = ""): String = buildString {
         append("$where bubbles=${page.bubbles.size}")
         for (b in page.bubbles) {
             append(" [bid=${b.id} kind=${b.kind} txt=${b.layout.text.toString().take(14)}]")
@@ -108,13 +108,14 @@ class PipelineOnTestPageTest {
         for (c in page.debugClusters) {
             append(" [cid=${c.id} kind=${c.kind} src=${c.sourceText.take(14)}]")
         }
+        if (lineDiag.isNotEmpty()) append(lineDiag)
     }
 
     private fun letterVisibleScreen(
         scenario: ActivityScenario<TestPageActivity>,
         pipeline: PagePipeline,
         ocr: OcrEngine,
-    ): RenderPage? {
+    ): Pair<RenderPage?, String> {
         val bitmap = captureWindow(scenario)
         try {
             val frame = toFrame(bitmap)
@@ -122,9 +123,16 @@ class PipelineOnTestPageTest {
                 val settings = Settings(sourceLanguage = SourceLanguage.JA, targetLanguage = "en")
                 val lines = runBlocking { ocr.recognize(frame.bitmap, SourceLanguage.JA) }
                 assertFalse("OCR found no lines on the test page", lines.isEmpty())
-                return runBlocking {
+                val lineDiag = buildString {
+                    append(" lines=${lines.size}")
+                    for (l in lines) {
+                        append(" [ocr=${l.text.take(14)} conf=${"%.2f".format(l.confidence)} box=${l.box} ang=${"%.0f".format(l.angleDeg)}]")
+                    }
+                }
+                val page = runBlocking {
                     pipeline.letter(lines, frame, settings, null, emptyList()) { System.currentTimeMillis() }
                 }.page
+                return page to lineDiag
             } finally {
                 frame.recycle()
             }

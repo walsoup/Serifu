@@ -162,6 +162,7 @@ object SpeechBubbleClusterer {
             rotated = part.rotated,
             charSizePx = part.charSizePx,
             medianCharSizePx = medianChar,
+            orientation = part.orientation,
         )
         val fill = if (region.mask != null) {
             ColorSampler.sampleFill(region.mask, vision.rgb)

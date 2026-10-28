@@ -165,7 +165,7 @@ private fun DrawScope.verticalBubble(
 }
 
 private fun DrawScope.caption(centerX: Float, top: Float, text: String, char: Float, paint: Paint) {
-    paint.textSize = char * 0.85f
+    paint.textSize = char
     val textWidth = paint.measureText(text)
     val width = textWidth + char * 1.6f
     val height = char * 1.7f

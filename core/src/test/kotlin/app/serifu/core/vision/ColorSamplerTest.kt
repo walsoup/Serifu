@@ -69,6 +69,7 @@ class ColorSamplerTest {
             rotated = false,
             charSizePx = 30f,
             medianCharSizePx = 30f,
+            orientation = app.serifu.core.vision.Orientation.HORIZONTAL,
         )
         assertEquals(BubbleKind.DIALOGUE, dialogue)
         val sfx = app.serifu.core.vision.BubbleClassifier.classify(
@@ -77,6 +78,7 @@ class ColorSamplerTest {
             rotated = false,
             charSizePx = 30f,
             medianCharSizePx = 30f,
+            orientation = app.serifu.core.vision.Orientation.HORIZONTAL,
         )
         assertEquals(BubbleKind.SFX, sfx)
         val free = app.serifu.core.vision.BubbleClassifier.classify(
@@ -85,6 +87,7 @@ class ColorSamplerTest {
             rotated = false,
             charSizePx = 30f,
             medianCharSizePx = 30f,
+            orientation = app.serifu.core.vision.Orientation.HORIZONTAL,
         )
         assertEquals(BubbleKind.FREE_TEXT, free)
     }
