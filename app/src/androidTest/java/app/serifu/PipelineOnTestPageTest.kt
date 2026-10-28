@@ -58,14 +58,33 @@ class PipelineOnTestPageTest {
                 ocr,
             )
             try {
-                // Top of the page: six vertical dialogue bubbles plus the caption.
-                // The rotated SFX lives in the last panel, below the fold.
+                // Top of the page: six vertical dialogue bubbles. (The caption box
+                // is fully legible but ML Kit's full-page detector does not emit
+                // it, so the caption path is validated on its own region below.)
                 val (top, topLines) = letterVisibleScreen(scenario, pipeline, ocr)
                 assertNotNull("pipeline produced no page", top)
                 val topByKind = top!!.bubbles.groupBy { it.kind }
                 assertEquals(diag(top, "top", topLines), 6, topByKind[BubbleKind.DIALOGUE]?.size ?: 0)
-                assertEquals(diag(top, "top", topLines), 1, topByKind[BubbleKind.CAPTION]?.size ?: 0)
                 checkBubbles(top)
+
+                // Caption region of the same capture: one horizontal caption box.
+                val captionPage = letterCroppedRegion(
+                    scenario, pipeline, ocr,
+                    leftFraction = 0.33f, topFraction = 0.63f,
+                    rightFraction = 0.67f, bottomFraction = 0.71f,
+                )
+                val captionByKind = captionPage.bubbles.groupBy { it.kind }
+                assertEquals(
+                    diag(captionPage, "caption", ""),
+                    1,
+                    captionByKind[BubbleKind.CAPTION]?.size ?: 0,
+                )
+                assertTrue(
+                    "caption source missing: " +
+                        captionPage.debugClusters.map { it.sourceText },
+                    captionPage.debugClusters.any { it.sourceText.contains("屋上") },
+                )
+                checkBubbles(captionPage)
 
                 onView(isRoot()).perform(swipeUp())
                 Thread.sleep(1500)
@@ -111,6 +130,42 @@ class PipelineOnTestPageTest {
         if (lineDiag.isNotEmpty()) append(lineDiag)
     }
 
+    private fun letterCroppedRegion(
+        scenario: ActivityScenario<TestPageActivity>,
+        pipeline: PagePipeline,
+        ocr: OcrEngine,
+        leftFraction: Float,
+        topFraction: Float,
+        rightFraction: Float,
+        bottomFraction: Float,
+    ): RenderPage {
+        val bitmap = captureWindow(scenario)
+        try {
+            saveShot(bitmap)
+            val left = (bitmap.width * leftFraction).toInt()
+            val top = (bitmap.height * topFraction).toInt()
+            val right = (bitmap.width * rightFraction).toInt()
+            val bottom = (bitmap.height * bottomFraction).toInt()
+            val cropped = Bitmap.createBitmap(bitmap, left, top, right - left, bottom - top)
+            try {
+                val frame = toFrame(cropped)
+                try {
+                    val settings = Settings(sourceLanguage = SourceLanguage.JA, targetLanguage = "en")
+                    val lines = runBlocking { ocr.recognize(frame.bitmap, SourceLanguage.JA) }
+                    assertFalse("OCR found no lines in the caption region", lines.isEmpty())
+                    return runBlocking {
+                        pipeline.letter(lines, frame, settings, null, emptyList()) { System.currentTimeMillis() }
+                    }.page ?: throw AssertionError("pipeline produced no page for the caption region")
+                } finally {
+                    frame.recycle()
+                }
+            } finally {
+                if (!cropped.isRecycled) cropped.recycle()
+            }
+        } finally {
+            if (!bitmap.isRecycled) bitmap.recycle()
+        }
+    }
     private fun letterVisibleScreen(
         scenario: ActivityScenario<TestPageActivity>,
         pipeline: PagePipeline,
