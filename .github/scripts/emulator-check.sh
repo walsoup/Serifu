@@ -3,8 +3,20 @@
 # Fails loudly if the app never reaches the foreground (no false-green).
 set -u
 
-adb install -r app/build/outputs/apk/debug/app-debug.apk
-adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+install_apk() {
+  for i in 1 2 3; do
+    if adb install -r "$1"; then return 0; fi
+    echo "install attempt $i failed, retrying"
+    sleep 10
+  done
+  return 1
+}
+
+install_apk app/build/outputs/apk/debug/app-debug.apk
+install_apk app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+adb shell pm list packages | grep app.serifu || { echo "INSTALL VERIFY FAILED"; exit 1; }
+adb shell input keyevent KEYCODE_WAKEUP || true
+adb shell wm dismiss-keyguard || true
 adb shell am instrument -w -e class app.serifu.PipelineOnTestPageTest app.serifu.test/androidx.test.runner.AndroidJUnitRunner
 
 for attempt in 1 2 3; do

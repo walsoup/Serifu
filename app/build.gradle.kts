@@ -25,8 +25,10 @@ android {
 
     buildTypes {
         debug {
+            // Emulator-only ABI keeps the 175 MB debug APK (LiteRT-LM + ML Kit
+            // natives) installable over streamed install on swiftshader.
             ndk {
-                abiFilters += listOf("arm64-v8a", "x86_64")
+                abiFilters += "x86_64"
             }
         }
         release {
