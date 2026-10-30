@@ -119,6 +119,13 @@ object Tuning {
     const val TRANSLATOR_IDLE_MS = 600_000L
     const val PREVIOUS_PAGE_CONTEXT_LINES = 8
     const val MLKIT_PACK_APPROX_BYTES = 30L * 1024 * 1024
+    /** Per-bubble cap once this language pair has completed one translation. */
+    const val MLKIT_TRANSLATE_TIMEOUT_MS = 4_000L
+    /**
+     * First inference after the pack is on disk also loads the model.
+     * Four seconds returns the source line, which then looks like a translation.
+     */
+    const val MLKIT_TRANSLATE_COLD_TIMEOUT_MS = 90_000L
     const val EMPTY_PAGE_RETRY_WINDOW_MS = 3_000L
     const val EMPTY_PAGE_RETRY_MAX = 2
     const val EMPTY_PAGE_RETRY_FIRST_MS = 800L

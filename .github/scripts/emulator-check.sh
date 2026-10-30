@@ -19,6 +19,10 @@ adb shell input keyevent KEYCODE_WAKEUP || true
 adb shell wm dismiss-keyguard || true
 pair_status=0
 adb shell am instrument -w -e class app.serifu.SvgPanelPairTest app.serifu.test/androidx.test.runner.AndroidJUnitRunner || pair_status=$?
+if [ "$pair_status" -ne 0 ]; then
+  mkdir -p ci-shots
+  adb logcat -d -t 400 -s MlKitTranslate:D MlKitTranslate:W AndroidRuntime:E TestRunner:E > ci-shots/pair-logcat.txt || true
+fi
 adb shell am instrument -w -e class app.serifu.PipelineOnTestPageTest app.serifu.test/androidx.test.runner.AndroidJUnitRunner || true
 mkdir -p ci-shots
 for f in \

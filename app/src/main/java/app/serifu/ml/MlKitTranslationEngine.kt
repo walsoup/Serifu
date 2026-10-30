@@ -66,38 +66,28 @@ class MlKitTranslationEngine(
             if (cached != null) translated[bubble.id] = cached else pending.add(bubble)
         }
         if (pending.isNotEmpty()) {
-            val translator = client(request.source, request.target)
+            val slot = client(request.source, request.target)
             val conditions = DownloadConditions.Builder().apply {
                 if (wifiOnly()) requireWifi()
             }.build()
             try {
-                translator.downloadModelIfNeeded(conditions).await()
+                slot.translator.downloadModelIfNeeded(conditions).await()
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled
             } catch (t: Throwable) {
                 android.util.Log.e("MlKitTranslate", "downloadModelIfNeeded failed", t)
                 throw TranslationUnavailable(request.source.englishName)
             }
-            val fresh = ArrayList<Pair<Int, String>>(pending.size)
+            val fresh = ArrayList<Attempt>(pending.size)
             for (bubble in pending) {
-                try {
-                    val text = kotlinx.coroutines.withTimeoutOrNull(4_000L) {
-                        translator.translate(bubble.text).await().trim()
-                    } ?: bubble.text
-                    android.util.Log.d("MlKitTranslate", "Translated [${bubble.id}]: '${bubble.text}' -> '$text'")
-                    fresh.add(bubble.id to text)
-                } catch (cancelled: kotlinx.coroutines.CancellationException) {
-                    throw cancelled
-                } catch (t: Throwable) {
-                    android.util.Log.w("MlKitTranslate", "Failed translating bubble ${bubble.id}: '${bubble.text}'", t)
-                    fresh.add(bubble.id to bubble.text)
-                }
+                fresh.add(translateBubble(slot, bubble))
             }
-            for ((bubbleId, text) in fresh) {
-                if (text.isEmpty()) continue
-                translated[bubbleId] = text
-                val source = pending.first { it.id == bubbleId }.text
-                cache.put(cache.key(id, request.target, cacheKey(request, source)), text)
+            for (attempt in fresh) {
+                if (attempt.text.isEmpty()) continue
+                translated[attempt.id] = attempt.text
+                if (!attempt.cacheable) continue
+                val source = pending.first { it.id == attempt.id }.text
+                cache.put(cache.key(id, request.target, cacheKey(request, source)), attempt.text)
             }
         }
         return PageTranslationResult(id, translated)
@@ -113,19 +103,45 @@ class MlKitTranslationEngine(
         for (key in stale) slots.remove(key)?.translator?.close()
     }
 
-    private fun client(source: SourceLanguage, target: String): Translator {
+    private suspend fun translateBubble(slot: Slot, bubble: app.serifu.core.translate.BubbleText): Attempt {
+        val budget = if (slot.warm) Tuning.MLKIT_TRANSLATE_TIMEOUT_MS else Tuning.MLKIT_TRANSLATE_COLD_TIMEOUT_MS
+        return try {
+            val text = kotlinx.coroutines.withTimeoutOrNull(budget) {
+                slot.translator.translate(bubble.text).await().trim()
+            }
+            if (text == null) {
+                android.util.Log.w(
+                    "MlKitTranslate",
+                    "timeout ${budget}ms [${bubble.id}]: '${bubble.text}'",
+                )
+                Attempt(bubble.id, bubble.text, cacheable = false)
+            } else {
+                slot.warm = true
+                slot.usedAt = clock()
+                android.util.Log.d("MlKitTranslate", "Translated [${bubble.id}]: '${bubble.text}' -> '$text'")
+                Attempt(bubble.id, text, cacheable = true)
+            }
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (t: Throwable) {
+            android.util.Log.w("MlKitTranslate", "Failed translating bubble ${bubble.id}: '${bubble.text}'", t)
+            Attempt(bubble.id, bubble.text, cacheable = false)
+        }
+    }
+
+    private fun client(source: SourceLanguage, target: String): Slot {
         val key = "${languageCode(source)}|${targetCode(target)}"
         val existing = slots[key]
         if (existing != null) {
             existing.usedAt = clock()
-            return existing.translator
+            return existing
         }
         val options = TranslatorOptions.Builder()
             .setSourceLanguage(languageCode(source))
             .setTargetLanguage(targetCode(target))
             .build()
-        val created = Translation.getClient(options)
-        slots[key] = Slot(created, clock())
+        val created = Slot(Translation.getClient(options), clock())
+        slots[key] = created
         return created
     }
 
@@ -155,5 +171,7 @@ class MlKitTranslationEngine(
     private fun targetCode(tag: String): String =
         TranslateLanguage.fromLanguageTag(tag) ?: TranslateLanguage.ENGLISH
 
-    private class Slot(val translator: Translator, var usedAt: Long)
+    private class Slot(val translator: Translator, var usedAt: Long, var warm: Boolean = false)
+
+    private class Attempt(val id: Int, val text: String, val cacheable: Boolean)
 }
