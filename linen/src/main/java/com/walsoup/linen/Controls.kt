@@ -35,9 +35,33 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.ui.platform.LocalView
+import android.os.Build
+import android.view.HapticFeedbackConstants
+import android.view.View
+
+private fun performTick(view: View) {
+    if (Build.VERSION.SDK_INT >= 34) {
+        view.performHapticFeedback(HapticFeedbackConstants.SEGMENT_TICK)
+    } else {
+        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+    }
+}
+
+private fun performTap(view: View) {
+    view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+}
 
 /**
  * Primary: the one main action on a screen. Tonal: secondary actions.
@@ -55,6 +79,11 @@ fun ActionButton(
     icon: ImageVector? = null,
     enabled: Boolean = true,
 ) {
+    val view = LocalView.current
+    val wrappedClick = {
+        performTap(view)
+        onClick()
+    }
     val c = Linen.colors
     val shape = RoundedCornerShape(LinenDimens.ButtonRadius)
     val content: @Composable RowScope.() -> Unit = {
@@ -68,7 +97,7 @@ fun ActionButton(
     val height = Modifier.height(LinenDimens.ButtonHeight)
     when (style) {
         ActionStyle.Ghost -> OutlinedButton(
-            onClick = onClick,
+            onClick = wrappedClick,
             enabled = enabled,
             shape = shape,
             border = BorderStroke(1.dp, c.hairline),
@@ -78,7 +107,7 @@ fun ActionButton(
             content = content,
         )
         else -> Button(
-            onClick = onClick,
+            onClick = wrappedClick,
             enabled = enabled,
             shape = shape,
             contentPadding = padding,
@@ -104,8 +133,12 @@ fun RoundIconButton(
     container: Color = Linen.colors.container,
     tint: Color = Linen.colors.primary,
 ) {
+    val view = LocalView.current
     IconButton(
-        onClick = onClick,
+        onClick = {
+            performTap(view)
+            onClick()
+        },
         colors = IconButtonDefaults.iconButtonColors(containerColor = container, contentColor = tint),
         modifier = modifier.size(size),
     ) {
@@ -162,29 +195,60 @@ fun Pill(
     modifier: Modifier = Modifier,
     leading: (@Composable () -> Unit)? = null,
 ) {
+    val view = LocalView.current
     val c = Linen.colors
     val shape = RoundedCornerShape(LinenDimens.PillRadius)
     val textStyle = (if (selected) Linen.type.label else Linen.type.bodySecondary)
         .copy(fontSize = Linen.type.caption.fontSize.times(1.08f))
+
+    val bgColor by animateColorAsState(
+        targetValue = if (selected) c.container else c.surface,
+        animationSpec = tween(durationMillis = 180),
+        label = "pill_bg",
+    )
+    val borderColor by animateColorAsState(
+        targetValue = if (selected) c.primary else c.hairline,
+        animationSpec = tween(durationMillis = 180),
+        label = "pill_border",
+    )
+    val textColor by animateColorAsState(
+        targetValue = if (selected) c.primary else c.text,
+        animationSpec = tween(durationMillis = 180),
+        label = "pill_text",
+    )
+
     Row(
         modifier = modifier
             .height(LinenDimens.PillHeight)
             .clip(shape)
-            .background(if (selected) c.container else c.surface)
-            .border(1.dp, if (selected) c.primary else c.hairline, shape)
-            .clickable(role = Role.RadioButton, onClick = onClick)
+            .background(bgColor)
+            .border(1.dp, borderColor, shape)
+            .clickable(
+                role = Role.RadioButton,
+                onClick = {
+                    performTick(view)
+                    onClick()
+                },
+            )
             .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
     ) {
-        if (selected) {
-            Icon(Icons.Default.Check, contentDescription = null, tint = c.primary, modifier = Modifier.size(15.dp))
-            Spacer(Modifier.width(5.dp))
-        } else if (leading != null) {
+        AnimatedVisibility(
+            visible = selected,
+            enter = fadeIn(tween(150)) + expandHorizontally(),
+            exit = fadeOut(tween(100)) + shrinkHorizontally(),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Check, contentDescription = null, tint = c.primary, modifier = Modifier.size(15.dp))
+                Spacer(Modifier.width(5.dp))
+            }
+        }
+        if (!selected && leading != null) {
             leading()
             Spacer(Modifier.width(6.dp))
         }
-        Text(text = text, style = textStyle, color = if (selected) c.primary else c.text, maxLines = 1)
+        Text(text = text, style = textStyle, color = textColor, maxLines = 1)
     }
 }
 

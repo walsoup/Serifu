@@ -21,11 +21,7 @@ import app.serifu.capture.ScreenCapturer
 import app.serifu.coordinator.PagePipeline
 import app.serifu.coordinator.TranslationCoordinator
 import app.serifu.core.coordinator.Event
-import app.serifu.ml.GemmaModelDownloader
-import app.serifu.ml.GemmaTranslationEngine
 import app.serifu.ml.MlKitTranslationEngine
-import app.serifu.ml.ModelCatalog
-import app.serifu.core.model.QualityMode
 import app.serifu.ml.OcrEngine
 import app.serifu.overlay.LetteringRenderer
 import app.serifu.overlay.OverlayManager
@@ -39,19 +35,29 @@ import kotlinx.coroutines.launch
 
 class SerifuAccessibilityService : AccessibilityService() {
     private val router = EventRouter()
-    private val overlays = OverlayManager(this)
+    private lateinit var overlays: OverlayManager
     private var sessionJob = SupervisorJob()
     private var scope = CoroutineScope(sessionJob + Dispatchers.Main.immediate)
     private var ocr = OcrEngine()
     private lateinit var translator: MlKitTranslationEngine
-    private var gemma: GemmaTranslationEngine? = null
-    private var capturer = ScreenCapturer(this, overlays, FrameConverter())
+    private lateinit var capturer: ScreenCapturer
     private var loop: TranslationCoordinator? = null
     private var screenReceiver: ScreenStateReceiver? = null
     private var started = false
+    val coordinator: TranslationCoordinator? get() = loop
+
+    override fun onCreate() {
+        super.onCreate()
+        overlays = OverlayManager(this)
+        capturer = ScreenCapturer(this, overlays, FrameConverter())
+    }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        isRunning = true
+        instance = this
+        val app = application as SerifuApp
+        app.isServiceActive.value = true
         if (started) return
         if (!sessionJob.isActive) {
             sessionJob = SupervisorJob()
@@ -59,22 +65,16 @@ class SerifuAccessibilityService : AccessibilityService() {
             ocr = OcrEngine()
             capturer = ScreenCapturer(this, overlays, FrameConverter())
         }
-        val app = application as SerifuApp
         translator = MlKitTranslationEngine(
             wifiOnly = { app.settingsRepository.settings.value?.wifiOnlyDownloads != false },
         )
-        gemma = GemmaTranslationEngine(
-            this,
-            diskCacheEnabled = { app.settingsRepository.settings.value?.llmDiskCache != false },
-        )
-        val gemmaEngine = gemma
         val reading = TranslationCoordinator(
             scope = scope,
             context = this,
             overlays = overlays,
             capturer = capturer,
             ocr = ocr,
-            pipeline = PagePipeline(this, translator, LetteringRenderer(this), ocr, gemma = gemmaEngine),
+            pipeline = PagePipeline(this, translator, LetteringRenderer(this), ocr),
             presence = { app.readerPresence.value },
             writeSettings = { transform ->
                 scope.launch { app.settingsRepository.update(transform) }
@@ -97,14 +97,13 @@ class SerifuAccessibilityService : AccessibilityService() {
             app.settingsRepository.settings.filterNotNull().collect { reading.pushSettings(it) }
         }
         scope.launch {
-            // Auto-upgrade to progressive once the Gemma model lands on disk.
-            val current = app.settingsRepository.settings.value
-            if (current != null &&
-                current.quality == QualityMode.FAST &&
-                ModelCatalog.isComplete(this@SerifuAccessibilityService)
-            ) {
-                app.settingsRepository.update { it.copy(quality = QualityMode.BEST_PROGRESSIVE) }
+            app.readerPresence.collect { presence ->
+                reading.send(Event.ForegroundChanged(isReader = presence.reader))
             }
+        }
+        val powerManager = getSystemService(android.os.PowerManager::class.java)
+        if (powerManager?.isInteractive == true) {
+            reading.onScreenOn()
         }
         val receiver = ScreenStateReceiver(
             onScreenOff = {
@@ -115,6 +114,7 @@ class SerifuAccessibilityService : AccessibilityService() {
         )
         val filter = IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_OFF)
+            addAction(Intent.ACTION_SCREEN_ON)
             addAction(Intent.ACTION_USER_PRESENT)
         }
         if (Build.VERSION.SDK_INT >= 33) {
@@ -157,11 +157,15 @@ class SerifuAccessibilityService : AccessibilityService() {
                 reading.send(Event.Scrolled)
             }
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> if (!ownOverlay) {
+                val powerManager = getSystemService(android.os.PowerManager::class.java)
+                if (powerManager?.isInteractive == true && !reading.screenIsOn) {
+                    reading.onScreenOn()
+                }
                 reading.hideForGesture()
                 when {
                     !after.reader -> reading.send(Event.ForegroundChanged(isReader = false))
                     after.obscured -> reading.send(Event.ObscuredChanged(obscured = true))
-                    !before.reader -> reading.send(Event.ForegroundChanged(isReader = true))
+                    !before.reader || !reading.readerForeground -> reading.send(Event.ForegroundChanged(isReader = true))
                     before.obscured -> reading.send(Event.ObscuredChanged(obscured = false))
                     else -> reading.send(Event.WindowChanged)
                 }
@@ -187,16 +191,6 @@ class SerifuAccessibilityService : AccessibilityService() {
     }
 
     override fun onInterrupt() = Unit
-
-    override fun onUnbind(intent: Intent?): Boolean {
-        stopSession()
-        return super.onUnbind(intent)
-    }
-
-    override fun onDestroy() {
-        stopSession()
-        super.onDestroy()
-    }
 
     private fun notifyPermissionLost() {
         if (Build.VERSION.SDK_INT >= 33 &&
@@ -226,20 +220,42 @@ class SerifuAccessibilityService : AccessibilityService() {
 
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
+        @Suppress("DEPRECATION")
         if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) {
-            gemma?.unloadNow()
             loop?.send(app.serifu.core.coordinator.Event.ConfigurationChanged)
         }
+        @Suppress("DEPRECATION")
         if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL) {
             ocr.close()
             ocr = OcrEngine()
-            translator.close()
+            if (::translator.isInitialized) {
+                translator.close()
+            }
         }
+    }
+
+    override fun onUnbind(intent: Intent?): Boolean {
+        isRunning = false
+        instance = null
+        (application as? SerifuApp)?.isServiceActive?.value = false
+        stopSession()
+        return super.onUnbind(intent)
+    }
+
+    override fun onDestroy() {
+        isRunning = false
+        instance = null
+        (application as? SerifuApp)?.isServiceActive?.value = false
+        stopSession()
+        super.onDestroy()
     }
 
     private fun stopSession() {
         if (!started) return
         started = false
+        isRunning = false
+        instance = null
+        (application as? SerifuApp)?.isServiceActive?.value = false
         screenReceiver?.let {
             try {
                 unregisterReceiver(it)
@@ -248,18 +264,27 @@ class SerifuAccessibilityService : AccessibilityService() {
             }
         }
         screenReceiver = null
-        overlays.detach()
+        if (::overlays.isInitialized) {
+            overlays.detach()
+        }
         ocr.close()
-        translator.close()
-        gemma?.close()
-        gemma = null
-        capturer.close()
+        if (::translator.isInitialized) {
+            translator.close()
+        }
+        if (::capturer.isInitialized) {
+            capturer.close()
+        }
         sessionJob.cancel()
         loop = null
     }
 
-    private companion object {
+    companion object {
         const val CHANNEL = "serifu_status"
         const val PERMISSION_NOTE = 21
+
+        var isRunning: Boolean = false
+            internal set
+        var instance: SerifuAccessibilityService? = null
+            internal set
     }
 }

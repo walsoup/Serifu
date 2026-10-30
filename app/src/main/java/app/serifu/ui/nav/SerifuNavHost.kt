@@ -1,6 +1,11 @@
 package app.serifu.ui.nav
 
 import androidx.activity.ComponentActivity
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -47,6 +52,30 @@ fun SerifuNavHost(startAtOnboarding: Boolean) {
     NavHost(
         navController = nav,
         startDestination = if (startAtOnboarding) Routes.onboarding(1) else Routes.Home,
+        enterTransition = {
+            slideIntoContainer(
+                towards = AnimatedContentTransitionScope.SlideDirection.Start,
+                animationSpec = tween(250, easing = FastOutSlowInEasing),
+            ) + fadeIn(animationSpec = tween(200))
+        },
+        exitTransition = {
+            slideOutOfContainer(
+                towards = AnimatedContentTransitionScope.SlideDirection.Start,
+                animationSpec = tween(220, easing = FastOutSlowInEasing),
+            ) + fadeOut(animationSpec = tween(180))
+        },
+        popEnterTransition = {
+            slideIntoContainer(
+                towards = AnimatedContentTransitionScope.SlideDirection.End,
+                animationSpec = tween(250, easing = FastOutSlowInEasing),
+            ) + fadeIn(animationSpec = tween(200))
+        },
+        popExitTransition = {
+            slideOutOfContainer(
+                towards = AnimatedContentTransitionScope.SlideDirection.End,
+                animationSpec = tween(220, easing = FastOutSlowInEasing),
+            ) + fadeOut(animationSpec = tween(180))
+        },
     ) {
         composable(Routes.Home) {
             HomeScreen(viewModel) { route -> nav.navigate(route) }

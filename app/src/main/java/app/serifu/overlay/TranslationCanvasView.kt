@@ -17,11 +17,16 @@ import kotlin.coroutines.resume
 class TranslationCanvasView(context: Context) : View(context) {
     private val painter = DebugOverlayPainter()
     private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
-    private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+    private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeJoin = Paint.Join.ROUND
+        strokeCap = Paint.Cap.ROUND
+    }
     private val strokeRect = RectF()
     private val location = IntArray(2)
     private var page: RenderPage? = null
     private var debug = false
+    private var timings: app.serifu.debug.PipelineTimings? = null
     private var originX = 0
     private var originY = 0
     var hiddenSinceUptimeMs: Long = SystemClock.uptimeMillis()
@@ -42,7 +47,13 @@ class TranslationCanvasView(context: Context) : View(context) {
     fun clearPage() {
         page = null
         debug = false
+        timings = null
         hideImmediately()
+    }
+
+    fun updateTimings(timings: app.serifu.debug.PipelineTimings) {
+        this.timings = timings
+        if (debug && visibility == VISIBLE) invalidate()
     }
 
     fun showPage(page: RenderPage, debug: Boolean) {
@@ -143,25 +154,40 @@ class TranslationCanvasView(context: Context) : View(context) {
                 canvas.rotate(bubble.rotationDeg, bubble.patch.centerX(), bubble.patch.centerY())
             }
             fillPaint.color = bubble.fillColor
-            canvas.drawRoundRect(bubble.patch, bubble.patchCornerPx, bubble.patchCornerPx, fillPaint)
-            if (bubble.seamless) {
-                strokePaint.strokeWidth = edgePx
-                strokePaint.color = bubble.fillColor
-                strokePaint.alpha = Tuning.PATCH_EDGE_STROKE_ALPHA
-                val grow = edgePx / 2f
-                strokeRect.set(bubble.patch)
-                strokeRect.inset(-grow, -grow)
-                canvas.drawRoundRect(
-                    strokeRect,
-                    bubble.patchCornerPx + grow,
-                    bubble.patchCornerPx + grow,
-                    strokePaint,
-                )
+            val clean = bubble.cleanPath
+            if (clean != null) {
+                canvas.drawPath(clean, fillPaint)
+                if (bubble.seamless) {
+                    strokePaint.strokeWidth = Tuning.CLEAN_FEATHER_PX
+                    strokePaint.color = bubble.fillColor
+                    strokePaint.alpha = Tuning.PATCH_EDGE_STROKE_ALPHA
+                    canvas.drawPath(clean, strokePaint)
+                }
+            } else {
+                canvas.drawRoundRect(bubble.patch, bubble.patchCornerPx, bubble.patchCornerPx, fillPaint)
+                if (bubble.seamless) {
+                    strokePaint.strokeWidth = edgePx
+                    strokePaint.color = bubble.fillColor
+                    strokePaint.alpha = Tuning.PATCH_EDGE_STROKE_ALPHA
+                    val grow = edgePx / 2f
+                    strokeRect.set(bubble.patch)
+                    strokeRect.inset(-grow, -grow)
+                    canvas.drawRoundRect(
+                        strokeRect,
+                        bubble.patchCornerPx + grow,
+                        bubble.patchCornerPx + grow,
+                        strokePaint,
+                    )
+                }
             }
             if (bubble.outlineColor != 0) {
                 strokePaint.strokeWidth = outlinePx
                 strokePaint.color = bubble.outlineColor
-                canvas.drawRoundRect(bubble.patch, bubble.patchCornerPx, bubble.patchCornerPx, strokePaint)
+                if (clean != null) {
+                    canvas.drawPath(clean, strokePaint)
+                } else {
+                    canvas.drawRoundRect(bubble.patch, bubble.patchCornerPx, bubble.patchCornerPx, strokePaint)
+                }
             }
             canvas.restore()
         }
@@ -175,7 +201,7 @@ class TranslationCanvasView(context: Context) : View(context) {
             canvas.restore()
         }
         canvas.restore()
-        if (debug) painter.draw(canvas, drawn, originX, originY, density)
+        if (debug) painter.draw(canvas, drawn, originX, originY, density, timings)
     }
 
     override fun onInitializeAccessibilityNodeInfo(info: AccessibilityNodeInfo) {

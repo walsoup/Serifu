@@ -32,15 +32,6 @@
     <string name="source_label">Source</string>
     <string name="models_title">Models</string>
     <string name="models_body">Japanese, Chinese and Korean recognition is built in. A translation pack is about 30 MB and downloads on this phone the first time you use that language.</string>
-    <string name="gemma_body">Gemma 4 is not installed.</string>
-    <string name="gemma_downloading">Downloading Gemma %1$s of %2$s</string>
-    <string name="gemma_state_ready">Installed · on-device LLM</string>
-    <string name="gemma_state_missing">Not installed · %1$s</string>
-    <string name="gemma_install">Install</string>
-    <string name="gemma_downloading_state">Downloading… %1$s of %2$s</string>
-    <string name="gemma_import">Import .litertlm file</string>
-    <string name="gemma_unsupported_title">Not available on this device</string>
-    <string name="gemma_size">2.0 GB download</string>
     <string name="readers_title">Reader apps</string>
     <string name="readers_body">Serifu only letters the apps you choose.</string>
     <string name="readers_empty">No reader apps selected yet.</string>
@@ -123,7 +114,7 @@
     <string name="tooltip_permission">Serifu lost accessibility access. Turn it back on in Settings.</string>
     <string name="tooltip_capture_failed">Serifu couldn\'t capture this screen. Scroll the page and it will try again.</string>
     <string name="tooltip_model">Download the %1$s pack in Serifu.</string>
-    <string name="open_test_page">Open test page</string>
+    <string name="open_test_page">Read a sample page</string>
     <string name="notification_channel">Serifu</string>
     <string name="debug_overlay">Draw the debug overlay</string>
     <string name="debug_overlay_subtitle">Bounding boxes, clusters, ink walls and masks on reader screens</string>

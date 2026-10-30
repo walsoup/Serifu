@@ -134,18 +134,25 @@ object BubbleRegionEstimator {
         val spanH = (spanBottom - spanTop).coerceAtLeast(1)
         val midTop = spanTop + (spanH * (1f - Tuning.LETTERING_MIDDLE_HEIGHT_FRACTION) / 2f).roundToInt()
         val midBottom = spanBottom - (spanH * (1f - Tuning.LETTERING_MIDDLE_HEIGHT_FRACTION) / 2f).roundToInt()
-        var minWidth = Int.MAX_VALUE
+        val widths = ArrayList<Int>()
         val centres = ArrayList<Int>()
         for (row in midTop until midBottom) {
             val local = row - bound.top
             if (local !in 0 until h || minX[local] < 0) continue
-            val width = maxX[local] - minX[local] + 1
-            if (width < minWidth) minWidth = width
+            widths.add(maxX[local] - minX[local] + 1)
             centres.add((minX[local] + maxX[local]) / 2)
         }
-        if (minWidth == Int.MAX_VALUE || centres.isEmpty()) return fallback
-        centres.sort()
-        val centreX = centres[centres.size / 2]
+        if (widths.isEmpty()) return fallback
+        val widthArray = widths.toIntArray()
+        val minWidth = BubbleSpan.bodyWidth(widthArray)
+        val threshold = BubbleSpan.bodyThreshold(widthArray)
+        val bodyCentres = ArrayList<Int>()
+        for (i in widths.indices) {
+            if (widths[i] >= threshold) bodyCentres.add(centres[i])
+        }
+        val pool = if (bodyCentres.isEmpty()) centres else bodyCentres
+        pool.sort()
+        val centreX = pool[pool.size / 2]
         val midH = (midBottom - midTop).coerceAtLeast(1)
         val shrink = Tuning.LETTERING_SHRINK_FRACTION
         val letterQ = IntRect(

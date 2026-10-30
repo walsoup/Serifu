@@ -17,9 +17,15 @@ install_apk app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
 adb shell pm list packages | grep app.serifu || { echo "INSTALL VERIFY FAILED"; exit 1; }
 adb shell input keyevent KEYCODE_WAKEUP || true
 adb shell wm dismiss-keyguard || true
-adb shell am instrument -w -e class app.serifu.PipelineOnTestPageTest app.serifu.test/androidx.test.runner.AndroidJUnitRunner
+pair_status=0
+adb shell am instrument -w -e class app.serifu.SvgPanelPairTest app.serifu.test/androidx.test.runner.AndroidJUnitRunner || pair_status=$?
+adb shell am instrument -w -e class app.serifu.PipelineOnTestPageTest app.serifu.test/androidx.test.runner.AndroidJUnitRunner || true
 mkdir -p ci-shots
-for f in serifu-shot-0.png serifu-shot-1.png serifu-shot-2.png; do
+for f in \
+  serifu-pair-greeting-original.png serifu-pair-greeting-translated.png \
+  serifu-pair-note-original.png serifu-pair-note-translated.png \
+  serifu-shot-0.png serifu-shot-1.png serifu-shot-2.png
+do
   adb pull /sdcard/Download/$f ci-shots/$f || true
 done
 ls -la ci-shots || true
@@ -51,3 +57,7 @@ case "$FINAL" in
   *app.serifu*) ;;
   *) echo "APP NOT FOREGROUND"; exit 1 ;;
 esac
+if [ "$pair_status" -ne 0 ]; then
+  echo "SVG PAIR TEST FAILED ($pair_status)"
+  exit "$pair_status"
+fi

@@ -25,6 +25,19 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
+import androidx.compose.ui.platform.LocalView
+import android.os.Build
+import android.view.HapticFeedbackConstants
+import android.view.View
+
+private fun performTick(view: View) {
+    if (Build.VERSION.SDK_INT >= 34) {
+        view.performHapticFeedback(HapticFeedbackConstants.SEGMENT_TICK)
+    } else {
+        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+    }
+}
+
 @Composable
 private fun LineScaffold(
     onClick: (() -> Unit)?,
@@ -32,12 +45,20 @@ private fun LineScaffold(
     role: Role? = null,
     content: @Composable RowScope.() -> Unit,
 ) {
+    val view = LocalView.current
     Column {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = LinenDimens.RowMinHeight)
-                .then(if (onClick != null) Modifier.clickable(role = role, onClick = onClick) else Modifier)
+                .then(
+                    if (onClick != null) {
+                        Modifier.clickable(role = role) {
+                            performTick(view)
+                            onClick()
+                        }
+                    } else Modifier
+                )
                 .padding(vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             content = content,
@@ -117,10 +138,16 @@ fun SwitchLine(
 
 @Composable
 fun LinenSwitch(checked: Boolean, onCheckedChange: ((Boolean) -> Unit)?) {
+    val view = LocalView.current
     val c = Linen.colors
     Switch(
         checked = checked,
-        onCheckedChange = onCheckedChange,
+        onCheckedChange = if (onCheckedChange != null) {
+            { next ->
+                performTick(view)
+                onCheckedChange(next)
+            }
+        } else null,
         colors = SwitchDefaults.colors(
             checkedThumbColor = c.onPrimary,
             checkedTrackColor = c.primary,

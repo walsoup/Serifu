@@ -25,15 +25,14 @@ android {
 
     buildTypes {
         debug {
-            // Emulator-only ABI keeps the 175 MB debug APK (LiteRT-LM + ML Kit
-            // natives) installable over streamed install on swiftshader.
             ndk {
-                abiFilters += "x86_64"
+                abiFilters += listOf("arm64-v8a", "x86_64")
             }
         }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+            signingConfig = signingConfigs.getByName("debug")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
@@ -86,7 +85,6 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.datastore)
-    implementation(libs.androidx.work)
     implementation(libs.androidx.dynamicanimation)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.coroutines.play.services)
@@ -95,7 +93,6 @@ dependencies {
     implementation(libs.mlkit.ocr.zh)
     implementation(libs.mlkit.ocr.ko)
     implementation(libs.mlkit.translate)
-    implementation(libs.litertlm)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlin.test)

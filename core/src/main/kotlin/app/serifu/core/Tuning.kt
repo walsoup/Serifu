@@ -84,6 +84,14 @@ object Tuning {
     const val LEAK_PERIMETER_FRACTION = 0.25f
     const val LETTERING_MIDDLE_HEIGHT_FRACTION = 0.70f
     const val LETTERING_SHRINK_FRACTION = 0.06f
+    /** Rows narrower than this fraction of the median width are a tail, not the body. */
+    const val TAIL_WIDTH_RATIO = 0.72f
+    /** Pull the clean in from the detected wall so the balloon outline survives. */
+    const val CLEAN_WALL_INSET_PX = 1.25f
+    /** How far the clean may reach past the mask to cover antialiased glyph edges. */
+    const val CLEAN_COVER_PAD_PX = 3
+    /** Same-colour stroke, in frame pixels, that hides the quarter-scale stair. */
+    const val CLEAN_FEATHER_PX = 2f
     const val PATCH_PAD_DP = 4f
     const val LUMA_PYRAMID_QUARTER = 4
     const val LUMA_PYRAMID_TINY = 16
@@ -110,16 +118,6 @@ object Tuning {
     const val TRANSLATION_CACHE_SIZE = 1000
     const val TRANSLATOR_IDLE_MS = 600_000L
     const val PREVIOUS_PAGE_CONTEXT_LINES = 8
-    const val GEMMA_PAGE_TIMEOUT_MS = 12_000L
-    const val GEMMA_UNLOAD_IDLE_MS = 180_000L
-    const val GEMMA_TEMPERATURE = 0.2
-    const val GEMMA_TOP_K = 40
-    const val GEMMA_TOP_P = 0.95
-    const val LLM_DISK_CACHE_MAX_BYTES = 20L * 1024 * 1024
-    const val DEVICE_RAM_MIN_BYTES = 7_500_000_000L
-    const val DEVICE_STORAGE_MIN_BYTES = 3_200_000_000L
-    const val DOWNLOAD_PROGRESS_INTERVAL_MS = 500L
-    const val DOWNLOAD_BUFFER_BYTES = 1024 * 1024
     const val MLKIT_PACK_APPROX_BYTES = 30L * 1024 * 1024
     const val EMPTY_PAGE_RETRY_WINDOW_MS = 3_000L
     const val EMPTY_PAGE_RETRY_MAX = 2
@@ -138,7 +136,12 @@ object Tuning {
     const val OVERFLOW_WIDTH_FRACTION = 0.20f
     const val OVERFLOW_HEIGHT_FRACTION = 0.30f
     const val ABSOLUTE_MIN_FONT_SP = 8
-    const val LETTER_SPACING_CAPS = 0.02f
+    const val LETTER_SPACING_CAPS = 0.035f
+    const val LETTER_SPACING_DIALOGUE = 0.012f
+    const val LETTER_SPACING_SHOUT = 0.06f
+    const val BALLOON_LEADING_OPEN = 1.0f
+    const val BALLOON_LEADING_STACKED = 0.92f
+    const val BALLOON_LEADING_TIGHT = 0.88f
     const val DIALOGUE_CORNER_DP = 8f
     const val CAPTION_CORNER_DP = 2f
     const val PATCH_EDGE_STROKE_DP = 1.5f
@@ -167,13 +170,14 @@ object Tuning {
     const val HUD_EXIT_MS = 80
     const val PILL_IDLE_DELAY_MS = 3_000L
     const val PILL_ALPHA_FADE_MS = 120
-    const val PILL_WIDTH_DP = 40
-    const val PILL_HEIGHT_DP = 72
-    const val PILL_OFFSCREEN_DP = 12
-    const val PILL_CORNER_DP = 20
-    const val PILL_SEAL_DP = 22
-    const val PILL_SEAL_CORNER_DP = 3
-    const val PILL_RING_DP = 2.5f
+    const val PILL_SIZE_DP = 44
+    const val PILL_WIDTH_DP = 44
+    const val PILL_HEIGHT_DP = 44
+    const val PILL_OFFSCREEN_DP = 10
+    const val PILL_CORNER_DP = 22
+    const val PILL_SEAL_DP = 44
+    const val PILL_SEAL_CORNER_DP = 22
+    const val PILL_RING_DP = 2.0f
     const val PILL_RING_INSET_DP = 3
     const val PILL_BREATHE_PERIOD_MS = 2_400
     const val PILL_BREATHE_STOP_MS = 10_000L

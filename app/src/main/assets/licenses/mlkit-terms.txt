@@ -1,0 +1,13 @@
+Google ML Kit Terms of Service
+================================
+
+Serifu uses Google ML Kit on-device APIs for:
+1. Text Recognition v2 (Japanese, Chinese, and Korean bundled models).
+2. On-Device Translation (offline neural translation models downloaded on-device).
+
+Terms of Service:
+https://developers.google.com/ml-kit/terms
+
+All ML Kit processing runs entirely on your device. Image frames and
+translated strings are never sent to Google servers by Serifu.
+Downloaded language packs are stored locally on the device in private app storage.

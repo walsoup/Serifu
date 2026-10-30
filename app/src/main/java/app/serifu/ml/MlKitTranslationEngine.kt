@@ -74,16 +74,24 @@ class MlKitTranslationEngine(
                 translator.downloadModelIfNeeded(conditions).await()
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled
-            } catch (_: Throwable) {
+            } catch (t: Throwable) {
+                android.util.Log.e("MlKitTranslate", "downloadModelIfNeeded failed", t)
                 throw TranslationUnavailable(request.source.englishName)
             }
-            val fresh = coroutineScope {
-                pending.map { bubble ->
-                    async {
-                        val text = translator.translate(bubble.text).await().trim()
-                        bubble.id to text
-                    }
-                }.awaitAll()
+            val fresh = ArrayList<Pair<Int, String>>(pending.size)
+            for (bubble in pending) {
+                try {
+                    val text = kotlinx.coroutines.withTimeoutOrNull(4_000L) {
+                        translator.translate(bubble.text).await().trim()
+                    } ?: bubble.text
+                    android.util.Log.d("MlKitTranslate", "Translated [${bubble.id}]: '${bubble.text}' -> '$text'")
+                    fresh.add(bubble.id to text)
+                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                    throw cancelled
+                } catch (t: Throwable) {
+                    android.util.Log.w("MlKitTranslate", "Failed translating bubble ${bubble.id}: '${bubble.text}'", t)
+                    fresh.add(bubble.id to bubble.text)
+                }
             }
             for ((bubbleId, text) in fresh) {
                 if (text.isEmpty()) continue

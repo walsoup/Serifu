@@ -457,10 +457,21 @@ private fun needsRestrictedSettings(context: Context): Boolean {
 }
 
 private fun isServiceEnabled(context: Context): Boolean {
+    if (app.serifu.service.SerifuAccessibilityService.isRunning) return true
+    val am = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as? android.view.accessibility.AccessibilityManager
+    val enabledServices = am?.getEnabledAccessibilityServiceList(android.accessibilityservice.AccessibilityServiceInfo.FEEDBACK_ALL_MASK).orEmpty()
+    if (enabledServices.any {
+        it.resolveInfo.serviceInfo.packageName == context.packageName &&
+            it.resolveInfo.serviceInfo.name.endsWith(".SerifuAccessibilityService")
+    }) return true
+
     val enabled = Settings.Secure.getString(context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
         ?: return false
-    val flat = ComponentName(context.packageName, SERVICE_CLASS).flattenToString()
-    return enabled.split(':').any { it.equals(flat, ignoreCase = true) }
+    return enabled.split(':').any { entry ->
+        val unflattened = ComponentName.unflattenFromString(entry)
+        unflattened?.packageName == context.packageName &&
+            (unflattened.className == SERVICE_CLASS || unflattened.shortClassName == ".service.SerifuAccessibilityService")
+    }
 }
 
 private fun openAppInfo(context: Context) {
@@ -482,19 +493,5 @@ private fun openAppInfo(context: Context) {
 }
 
 private fun openAccessibilitySettings(context: Context) {
-    val component = ComponentName(context.packageName, SERVICE_CLASS).flattenToString()
-    val details = Intent("android.settings.ACCESSIBILITY_DETAILS_SETTINGS").apply {
-        putExtra(Intent.EXTRA_COMPONENT_NAME, component)
-        putExtra("extra_fragment_arg_key", component)
-        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    }
-    try {
-        context.startActivity(details)
-    } catch (_: Throwable) {
-        try {
-            context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            })
-        } catch (_: Throwable) {}
-    }
+    app.serifu.SerifuApp.openAccessibilitySettings(context)
 }

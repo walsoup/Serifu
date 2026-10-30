@@ -26,9 +26,9 @@ data class Settings(
     val pillYFraction: Float = Tuning.PILL_Y_FRACTION_DEFAULT,
     val pillIdleAlpha: Float = Tuning.PILL_IDLE_ALPHA_DEFAULT,
     val haptics: Boolean = true,
-    val wifiOnlyDownloads: Boolean = true,
+    val wifiOnlyDownloads: Boolean = false,
     val llmDiskCache: Boolean = true,
     val debugOverlay: Boolean = false,
     val dynamicColor: Boolean = false,
-    val onboardingDone: Boolean = false,
+    val onboardingDone: Boolean = true,
 )

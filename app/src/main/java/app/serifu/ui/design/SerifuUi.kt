@@ -27,9 +27,15 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalView
+import android.os.Build
+import android.view.HapticFeedbackConstants
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -245,19 +251,44 @@ fun Pill(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val view = LocalView.current
     val c = Serifu.colors
+
+    val bgColor by animateColorAsState(
+        targetValue = if (selected) c.text else Color.Transparent,
+        animationSpec = tween(durationMillis = 180),
+        label = "pill_bg",
+    )
+    val borderColor by animateColorAsState(
+        targetValue = if (selected) c.text else c.inactive,
+        animationSpec = tween(durationMillis = 180),
+        label = "pill_border",
+    )
+    val textColor by animateColorAsState(
+        targetValue = if (selected) c.bg else c.textSecondary,
+        animationSpec = tween(durationMillis = 180),
+        label = "pill_text",
+    )
+
     Box(
         modifier
             .clip(RoundedCornerShape(100))
-            .background(if (selected) c.text else Color.Transparent)
-            .border(1.5.dp, if (selected) c.text else c.inactive, RoundedCornerShape(100))
-            .clickable(onClick = onClick)
+            .background(bgColor)
+            .border(1.5.dp, borderColor, RoundedCornerShape(100))
+            .clickable {
+                if (Build.VERSION.SDK_INT >= 34) {
+                    view.performHapticFeedback(HapticFeedbackConstants.SEGMENT_TICK)
+                } else {
+                    view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                }
+                onClick()
+            }
             .padding(horizontal = 18.dp, vertical = 9.dp),
     ) {
         Text(
             text = text,
             style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Bold),
-            color = if (selected) c.bg else c.textSecondary,
+            color = textColor,
         )
     }
 }
@@ -275,6 +306,7 @@ fun SettingLine(
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
 ) {
+    val view = LocalView.current
     val c = Serifu.colors
     val content: @Composable RowScope.() -> Unit = {
         Column(Modifier.weight(1f)) {
@@ -301,18 +333,25 @@ fun SettingLine(
         }
     }
 
-    val row = Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 56.dp)
-            .clickable(enabled = onClick != null) { onClick?.invoke() }
-            .padding(horizontal = 20.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        content = content,
-    )
-
     Column(modifier.fillMaxWidth()) {
-        row
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 56.dp)
+                .clickable(enabled = onClick != null) {
+                    if (onClick != null) {
+                        if (Build.VERSION.SDK_INT >= 34) {
+                            view.performHapticFeedback(HapticFeedbackConstants.SEGMENT_TICK)
+                        } else {
+                            view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                        }
+                        onClick()
+                    }
+                }
+                .padding(horizontal = 20.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            content = content,
+        )
         if (showHairline) Hairline()
     }
 }
@@ -340,6 +379,7 @@ fun SwitchLine(
     subtitle: String? = null,
     showHairline: Boolean = true,
 ) {
+    val view = LocalView.current
     val c = Serifu.colors
     Column {
         Row(
@@ -349,7 +389,14 @@ fun SwitchLine(
                 .toggleable(
                     value = checked,
                     role = Role.Checkbox,
-                    onValueChange = onCheckedChange,
+                    onValueChange = { next ->
+                        if (Build.VERSION.SDK_INT >= 34) {
+                            view.performHapticFeedback(HapticFeedbackConstants.SEGMENT_TICK)
+                        } else {
+                            view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                        }
+                        onCheckedChange(next)
+                    },
                 )
                 .padding(horizontal = 20.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -448,6 +495,7 @@ fun ActionButton(
         ActionStyle.Tonal -> c.bg
         ActionStyle.Ghost -> c.textSecondary
     }
+    val view = LocalView.current
     Box(
         modifier
             .alpha(alpha)
@@ -455,7 +503,15 @@ fun ActionButton(
             .clip(RoundedCornerShape(14.dp))
             .background(bg)
             .then(if (style == ActionStyle.Ghost) Modifier.border(1.5.dp, c.hairline, RoundedCornerShape(14.dp)) else Modifier)
-            .clickable(enabled = enabled, interactionSource = interact, indication = null, onClick = onClick)
+            .clickable(
+                enabled = enabled,
+                interactionSource = interact,
+                indication = null,
+                onClick = {
+                    view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                    onClick()
+                },
+            )
             .padding(vertical = 17.dp),
         contentAlignment = Alignment.Center,
     ) {
@@ -513,19 +569,44 @@ fun ScriptCell(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val view = LocalView.current
     val c = Serifu.colors
+
+    val borderColor by animateColorAsState(
+        targetValue = if (selected) c.primary else c.inactive,
+        animationSpec = tween(durationMillis = 180),
+        label = "script_border",
+    )
+    val bgColor by animateColorAsState(
+        targetValue = if (selected) c.surfaceAlt else c.surface,
+        animationSpec = tween(durationMillis = 180),
+        label = "script_bg",
+    )
+    val labelColor by animateColorAsState(
+        targetValue = if (selected) c.primary else c.textSecondary,
+        animationSpec = tween(durationMillis = 180),
+        label = "script_label",
+    )
+
     Column(
         modifier
             .clip(RoundedCornerShape(14.dp))
-            .background(if (selected) c.surfaceAlt else c.surface)
-            .border(1.5.dp, if (selected) c.primary else c.inactive, RoundedCornerShape(14.dp))
-            .clickable(onClick = onClick)
+            .background(bgColor)
+            .border(1.5.dp, borderColor, RoundedCornerShape(14.dp))
+            .clickable {
+                if (Build.VERSION.SDK_INT >= 34) {
+                    view.performHapticFeedback(HapticFeedbackConstants.SEGMENT_TICK)
+                } else {
+                    view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                }
+                onClick()
+            }
             .padding(top = 16.dp, bottom = 13.dp)
             .fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(glyph, style = TextStyle(fontSize = 26.sp), color = c.text)
         Spacer(Modifier.height(4.dp))
-        Text(name, style = Serifu.type.overline.copy(letterSpacing = 1.sp, fontSize = 10.sp), color = if (selected) c.primary else c.textSecondary)
+        Text(name, style = Serifu.type.overline.copy(letterSpacing = 1.sp, fontSize = 10.sp), color = labelColor)
     }
 }

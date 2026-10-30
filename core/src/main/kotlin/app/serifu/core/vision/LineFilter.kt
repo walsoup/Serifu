@@ -13,8 +13,9 @@ data class FilteredLine(
 )
 
 object LineFilter {
-    private val punctuationOnly = Regex("^[\\p{Punct}\\s]+$")
-    private val latinOnly = Regex("^[A-Za-z0-9\\p{Punct}\\s]+$")
+    private val punctuationOnly = Regex("^[\\p{Punct}\\s·・—–-]+$")
+    private val latinOnly = Regex("^[A-Za-z0-9\\p{Punct}\\s·・—–-]+$")
+    private val hasCjk = Regex("[\\p{IsHan}\\p{IsHiragana}\\p{IsKatakana}\\p{IsHangul}]")
 
     fun keep(
         lines: List<OcrLine>,
@@ -31,7 +32,7 @@ object LineFilter {
             if (text.isEmpty() || punctuationOnly.matches(text)) return@mapNotNull null
             // A recognizer with no confidence score reports 0 for every line. Dropping those would erase the page.
             if (line.confidence > 0f && line.confidence < Tuning.LINE_MIN_CONFIDENCE) return@mapNotNull null
-            if (skipLatin && latinOnly.matches(text)) return@mapNotNull null
+            if (skipLatin && (latinOnly.matches(text) || !hasCjk.containsMatchIn(text))) return@mapNotNull null
             if (pill != null && !pill.isEmpty && pill.contains(box)) return@mapNotNull null
             val orientation = orientationOf(line)
             FilteredLine(

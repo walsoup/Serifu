@@ -96,6 +96,7 @@ class TranslationCoordinator(
         private set
 
     val readerForeground: Boolean get() = presence().reader && screenOn
+    val screenIsOn: Boolean get() = screenOn
 
     fun start() = scope.launch {
         for (event in events) {
@@ -135,6 +136,11 @@ class TranslationCoordinator(
         }
         if (previous.quality != value.quality) {
             send(Event.EngineChanged)
+            signaled = true
+        }
+        if (previous.debugOverlay != value.debugOverlay) {
+            overlays.canvas.clearPage()
+            send(Event.LanguageChanged)
             signaled = true
         }
         if (!signaled) syncChrome()
@@ -374,7 +380,8 @@ class TranslationCoordinator(
                 if (exact != null) {
                     if (generation != state.generation) return
                     timings = timings.copy(
-                        captureMs = (fpStarted - started).coerceAtLeast(0),
+                        captureMs = frame.captureMs,
+                        convertMs = frame.convertMs,
                         fingerprintMs = fingerprintMs,
                         ocrMs = 0,
                         clusterMs = 0,
@@ -386,39 +393,11 @@ class TranslationCoordinator(
                         selfDiscarded = selfDiscarded,
                     )
                     publishTimings(timings)
+                    overlays.canvas.updateTimings(timings)
                     Log.d(TAG, "cache=exact total=${timings.totalMs}ms")
                     snapshotPrev(frame)
                     send(Event.PageReady(generation, rememberPage(exact)))
                     return
-                }
-                if (settings.quality != app.serifu.core.model.QualityMode.FAST) {
-                    val gemmaHit = pageCache.get(
-                        fingerprint,
-                        frame.rotation,
-                        settings.sourceLanguage,
-                        settings.targetLanguage,
-                        EngineId.GEMMA4_E2B,
-                    )
-                    if (gemmaHit != null) {
-                        if (generation != state.generation) return
-                        timings = timings.copy(
-                            captureMs = (fpStarted - started).coerceAtLeast(0),
-                            fingerprintMs = fingerprintMs,
-                            ocrMs = 0,
-                            clusterMs = 0,
-                            translateMlKitMs = 0,
-                            translateGemmaMs = 0,
-                            layoutMs = 0,
-                            totalMs = (clock() - started).coerceAtLeast(0),
-                            cacheResult = "exact",
-                            selfDiscarded = selfDiscarded,
-                        )
-                        publishTimings(timings)
-                        Log.d(TAG, "cache=exact(gemma) total=${timings.totalMs}ms")
-                        snapshotPrev(frame)
-                        send(Event.PageReady(generation, rememberPage(gemmaHit)))
-                        return
-                    }
                 }
                 if (!recaptured && presence().reader) {
                     val prevT = prevTiny
@@ -436,6 +415,21 @@ class TranslationCoordinator(
                                 val preview = shiftPage(base, estimate.dyPx, frameW, frameH)
                                 if (preview != null) {
                                     cacheResult = "shift dy=${estimate.dyPx}"
+                                    timings = timings.copy(
+                                        captureMs = frame.captureMs,
+                                        convertMs = frame.convertMs,
+                                        fingerprintMs = fingerprintMs,
+                                        ocrMs = 0,
+                                        clusterMs = 0,
+                                        translateMlKitMs = 0,
+                                        translateGemmaMs = 0,
+                                        layoutMs = 0,
+                                        totalMs = (clock() - started).coerceAtLeast(0),
+                                        cacheResult = cacheResult,
+                                        selfDiscarded = selfDiscarded,
+                                    )
+                                    publishTimings(timings)
+                                    overlays.canvas.updateTimings(timings)
                                     send(Event.PageReady(generation, rememberPage(preview)))
                                 }
                             }
@@ -452,6 +446,7 @@ class TranslationCoordinator(
                     return
                 }
                 val ocrDone = clock()
+                Log.d(TAG, "recognize completed: lines=${lines.size}, gen=$generation, stateGen=${state.generation}")
                 if (generation != state.generation) return
                 if (!recaptured && SelfDetection.leaked(lines, shownTexts)) {
                     recaptured = true
@@ -480,6 +475,7 @@ class TranslationCoordinator(
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (missing: TranslationUnavailable) {
+                    Log.w(TAG, "TranslationUnavailable: ${missing.languageName}")
                     if (generation == state.generation) {
                         withContext(Dispatchers.Main) {
                             overlays.showTooltip(context.getString(R.string.tooltip_model, missing.languageName))
@@ -487,15 +483,18 @@ class TranslationCoordinator(
                         send(Event.PageEmpty(generation))
                     }
                     return
-                } catch (_: Throwable) {
+                } catch (t: Throwable) {
+                    Log.e(TAG, "pipeline.letter threw", t)
                     send(Event.CaptureFailed(generation, CaptureFailure.OTHER))
                     return
                 }
                 val finished = clock()
+                Log.d(TAG, "letter completed: bubbles=${lettered.page?.bubbles?.size}, gen=$generation, stateGen=${state.generation}")
                 if (generation != state.generation) return
                 val page = lettered.page
                 timings = timings.copy(
-                    captureMs = (ocrStarted - started).coerceAtLeast(0),
+                    captureMs = frame.captureMs,
+                    convertMs = frame.convertMs,
                     fingerprintMs = fingerprintMs,
                     ocrMs = (ocrDone - ocrStarted).coerceAtLeast(0),
                     clusterMs = lettered.clusterMs,
@@ -507,6 +506,7 @@ class TranslationCoordinator(
                     selfDiscarded = selfDiscarded,
                 )
                 publishTimings(timings)
+                overlays.canvas.updateTimings(timings)
                 Log.d(
                     TAG,
                     "lines=${lines.size} bubbles=${page?.bubbles?.size ?: 0} ocr=${timings.ocrMs}ms " +
@@ -525,31 +525,6 @@ class TranslationCoordinator(
                     )
                     snapshotPrev(frame)
                     send(Event.PageReady(generation, rememberPage(page)))
-                    val upgrade = lettered.upgrade
-                    if (upgrade != null) {
-                        val upgradeRotation = frame.rotation
-                        scope.launch(Dispatchers.Default) {
-                            val upgraded = try {
-                                upgrade.invoke()
-                            } catch (_: CancellationException) {
-                                return@launch
-                            } catch (_: Throwable) {
-                                return@launch
-                            } ?: return@launch
-                            if (generation != state.generation) return@launch
-                            pageCache.put(
-                                fingerprint,
-                                upgradeRotation,
-                                settings.sourceLanguage,
-                                settings.targetLanguage,
-                                EngineId.GEMMA4_E2B,
-                                upgraded.page,
-                            )
-                            timings = timings.copy(translateGemmaMs = upgraded.translateGemmaMs)
-                            publishTimings(timings)
-                            send(Event.UpgradeReady(generation, rememberPage(upgraded.page)))
-                        }
-                    }
                 }
                 return
             }
@@ -585,6 +560,7 @@ class TranslationCoordinator(
         lastShownPage = page
         shownTexts = page.bubbles.map { it.layout.text.toString() }
         previousLines = page.sourceLines.take(Tuning.PREVIOUS_PAGE_CONTEXT_LINES)
+        overlays.canvas.updateTimings(timings)
         if (crossfade) {
             overlays.canvas.crossfadeTo(page, settings.debugOverlay)
         } else {
@@ -675,6 +651,9 @@ class TranslationCoordinator(
                     seamless = bubble.seamless,
                     outlineColor = bubble.outlineColor,
                     sourceTextForDebug = bubble.sourceTextForDebug,
+                    cleanPath = bubble.cleanPath?.let { src ->
+                        android.graphics.Path(src).apply { offset(0f, dyPx.toFloat()) }
+                    },
                 ),
             )
         }

@@ -40,11 +40,10 @@ interface PillHost {
 }
 
 class FloatingControlPillView(context: Context) : View(context) {
-    private val body = Paint(Paint.ANTI_ALIAS_FLAG)
     private val hairline = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         color = InkPaper.PAPER
-        alpha = (0.2f * 255).roundToInt()
+        alpha = (0.35f * 255).roundToInt()
     }
     private val sealPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -56,12 +55,11 @@ class FloatingControlPillView(context: Context) : View(context) {
         textAlign = Paint.Align.CENTER
         isFakeBoldText = true
     }
+
     private val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = InkPaper.INK
-        alpha = 90
-        maskFilter = BlurMaskFilter(dpF(8f), BlurMaskFilter.Blur.NORMAL)
+        color = 0x88000000.toInt()
+        maskFilter = BlurMaskFilter(dpF(6f), BlurMaskFilter.Blur.NORMAL)
     }
-    private val bodyRect = RectF()
     private val sealRect = RectF()
     private val ringRect = RectF()
     private var params: WindowManager.LayoutParams? = null
@@ -163,7 +161,9 @@ class FloatingControlPillView(context: Context) : View(context) {
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        setMeasuredDimension(dp(Tuning.PILL_WIDTH_DP), dp(Tuning.PILL_HEIGHT_DP) + dp(8))
+        val size = dp(Tuning.PILL_SIZE_DP)
+        val pad = dp(4)
+        setMeasuredDimension(size + pad * 2, size + pad * 2)
     }
 
     override fun onAttachedToWindow() {
@@ -230,9 +230,7 @@ class FloatingControlPillView(context: Context) : View(context) {
                     dragging = false
                     setLayerType(LAYER_TYPE_NONE, null)
                     springToNearestEdge()
-                } else if (!longPressed && event.actionMasked == MotionEvent.ACTION_UP &&
-                    event.eventTime - downTime <= tapTimeout
-                ) {
+                } else if (!longPressed && event.actionMasked == MotionEvent.ACTION_UP) {
                     host?.onTap()
                 }
                 wake()
@@ -244,86 +242,66 @@ class FloatingControlPillView(context: Context) : View(context) {
     }
 
     override fun onDraw(canvas: Canvas) {
-        val pad = dpF(4f)
-        bodyRect.set(0f, pad, width.toFloat(), pad + dpF(Tuning.PILL_HEIGHT_DP.toFloat()))
-        val radius = dpF(Tuning.PILL_CORNER_DP.toFloat())
+        val cx = width / 2f
+        val cy = height / 2f
+        val radius = dpF(Tuning.PILL_SIZE_DP / 2f)
+        sealRect.set(cx - radius, cy - radius, cx + radius, cy + radius)
+
         if (dragging) {
-            val shadow = RectF(bodyRect)
-            shadow.offset(0f, dpF(2f))
-            canvas.drawRoundRect(shadow, radius, radius, shadowPaint)
+            canvas.drawCircle(cx, cy + dpF(3f), radius + dpF(2f), shadowPaint)
             canvas.save()
-            canvas.scale(Tuning.PILL_DRAG_SCALE, Tuning.PILL_DRAG_SCALE, width / 2f, height / 2f)
+            canvas.scale(Tuning.PILL_DRAG_SCALE, Tuning.PILL_DRAG_SCALE, cx, cy)
         }
-        body.color = InkPaper.INK
-        canvas.drawRoundRect(bodyRect, radius, radius, body)
-        val inset = hairline.strokeWidth / 2f
-        canvas.drawRoundRect(
-            bodyRect.left + inset,
-            bodyRect.top + inset,
-            bodyRect.right - inset,
-            bodyRect.bottom - inset,
-            radius,
-            radius,
-            hairline,
-        )
-        val seal = dpF(Tuning.PILL_SEAL_DP.toFloat())
-        val cx = visibleCenterX()
-        val cy = bodyRect.centerY()
-        sealRect.set(cx - seal / 2f, cy - seal / 2f, cx + seal / 2f, cy + seal / 2f)
+
         sealPaint.color = if (phase == PillPhase.OFF) InkPaper.SCREENTONE else InkPaper.HANKO
-        val sealRadius = dpF(Tuning.PILL_SEAL_CORNER_DP.toFloat())
-        canvas.drawRoundRect(sealRect, sealRadius, sealRadius, sealPaint)
-        drawRing(canvas)
+        canvas.drawCircle(cx, cy, radius, sealPaint)
+
+        val inset = hairline.strokeWidth / 2f
+        canvas.drawCircle(cx, cy, radius - inset, hairline)
+
+        drawRing(canvas, cx, cy, radius)
+
         glyphPaint.color = InkPaper.PAPER
         val baseline = cy - (glyphPaint.ascent() + glyphPaint.descent()) / 2f
         canvas.drawText(glyph, cx, baseline, glyphPaint)
+
         if (dragging) canvas.restore()
     }
 
-    private fun drawRing(canvas: Canvas) {
-        val expand = dpF(Tuning.PILL_RING_INSET_DP.toFloat()) + ringPaint.strokeWidth / 2f
-        ringRect.set(
-            sealRect.left - expand,
-            sealRect.top - expand,
-            sealRect.right + expand,
-            sealRect.bottom + expand,
-        )
+    private fun drawRing(canvas: Canvas, cx: Float, cy: Float, radius: Float) {
+        val ringRadius = radius - dpF(Tuning.PILL_RING_INSET_DP.toFloat()) - ringPaint.strokeWidth / 2f
+        ringRect.set(cx - ringRadius, cy - ringRadius, cx + ringRadius, cy + ringRadius)
         ringPaint.pathEffect = null
         ringPaint.alpha = 255
         when (phase) {
             PillPhase.AUTO_READY -> {
                 ringPaint.color = InkPaper.PAPER
                 ringPaint.alpha = (ringAlpha * 255).roundToInt().coerceIn(0, 255)
-                canvas.drawRoundRect(ringRect, ringRect.width() / 2f, ringRect.height() / 2f, ringPaint)
+                canvas.drawArc(ringRect, 0f, 360f, false, ringPaint)
             }
             PillPhase.MANUAL -> {
                 ringPaint.color = InkPaper.PAPER
-                canvas.drawRoundRect(ringRect, ringRect.width() / 2f, ringRect.height() / 2f, ringPaint)
+                canvas.drawArc(ringRect, 0f, 360f, false, ringPaint)
             }
             PillPhase.PAUSED -> {
                 ringPaint.color = InkPaper.PAPER
                 ringPaint.pathEffect = dash
-                canvas.drawRoundRect(ringRect, ringRect.width() / 2f, ringRect.height() / 2f, ringPaint)
+                canvas.drawArc(ringRect, 0f, 360f, false, ringPaint)
             }
             PillPhase.PROCESSING -> {
-                ringPaint.color = InkPaper.HANKO
+                ringPaint.color = InkPaper.PAPER
                 canvas.drawArc(ringRect, spin, 90f, false, ringPaint)
             }
             PillPhase.ERROR -> {
                 ringPaint.color = InkPaper.AMBER
-                canvas.drawRoundRect(ringRect, ringRect.width() / 2f, ringRect.height() / 2f, ringPaint)
+                canvas.drawArc(ringRect, 0f, 360f, false, ringPaint)
             }
             PillPhase.OFF -> {
-                ringPaint.color = InkPaper.SCREENTONE
-                canvas.drawRoundRect(ringRect, ringRect.width() / 2f, ringRect.height() / 2f, ringPaint)
+                ringPaint.color = InkPaper.PAPER
+                ringPaint.alpha = 90
+                canvas.drawArc(ringRect, 0f, 360f, false, ringPaint)
             }
         }
-    }
-
-    private fun visibleCenterX(): Float {
-        val off = dpF(Tuning.PILL_OFFSCREEN_DP.toFloat())
-        val visible = width - off
-        return if (dockedEnd) visible / 2f else off + visible / 2f
     }
 
     private fun syncAnimations() {

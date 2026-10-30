@@ -49,6 +49,29 @@ class BubbleRegionEstimatorTest {
     }
 
     @Test
+    fun aDownwardTailDoesNotCollapseTheLetteringColumn() {
+        val quarter = white(80, 80)
+        ellipseOutline(quarter, 40, 28, 22, 16)
+        val w = quarter.width
+        for (y in 42 until 68) {
+            quarter.bytes[y * w + 35] = 0
+            quarter.bytes[y * w + 44] = 0
+            for (x in 36 until 44) quarter.bytes[y * w + x] = 255.toByte()
+        }
+        for (x in 35 until 45) quarter.bytes[67 * w + x] = 0
+        for (y in 40 until 46) {
+            for (x in 36 until 44) quarter.bytes[y * w + x] = 255.toByte()
+        }
+        val union = IntRect(140, 60, 180, 150)
+        val region = BubbleRegionEstimator.estimate(quarter, union, charSizePx = 28f, padPx = 12)
+        assertNotNull(region.mask)
+        assertTrue(
+            region.letteringRect.width > 80,
+            "tail collapsed the column to ${region.letteringRect.width}",
+        )
+    }
+
+    @Test
     fun captionRectangleHasHighFillRatio() {
         val quarter = white(60, 60)
         // Rectangular narration box: 3px black border, white interior.

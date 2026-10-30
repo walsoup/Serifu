@@ -25,6 +25,8 @@ class CapturedFrame(
     val systemBars: VerticalInsets,
     val timestampUptime: Long,
     val secureBlack: Boolean,
+    var captureMs: Long = 0L,
+    var convertMs: Long = 0L,
     private val onRecycle: (CapturedFrame) -> Unit,
 ) {
     private var recycled = false

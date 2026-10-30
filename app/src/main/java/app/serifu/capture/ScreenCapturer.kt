@@ -48,11 +48,15 @@ class ScreenCapturer(
         overlays.canvas.awaitOffScreen()
         overlays.dismissHudImmediately()
         if (!stillCurrent()) return CaptureOutcome.Superseded
-        lastScreenshotRequestUptimeMs = clock()
+        val shotStarted = clock()
+        lastScreenshotRequestUptimeMs = shotStarted
         val outcome = suspendCancellableCoroutine { cont ->
             val callback = object : AccessibilityService.TakeScreenshotCallback {
                 override fun onSuccess(screenshot: AccessibilityService.ScreenshotResult) {
+                    val shotEnded = clock()
+                    val captureMs = (shotEnded - shotStarted).coerceAtLeast(0)
                     val buffer = screenshot.hardwareBuffer
+                    val convStarted = clock()
                     val frame = try {
                         converter.convert(
                             hardwareBuffer = buffer,
@@ -62,10 +66,17 @@ class ScreenCapturer(
                             pillRect = overlays.pillRectOnScreen(),
                             systemBars = overlays.systemBars(),
                         )
-                    } catch (_: Throwable) {
+                    } catch (t: Throwable) {
+                        android.util.Log.e("SerifuCapture", "converter.convert failed", t)
                         null
                     } finally {
                         closeBuffer(buffer)
+                    }
+                    val convEnded = clock()
+                    val convertMs = (convEnded - convStarted).coerceAtLeast(0)
+                    if (frame != null) {
+                        frame.captureMs = captureMs
+                        frame.convertMs = convertMs
                     }
                     if (!cont.isActive) {
                         frame?.recycle()
@@ -76,12 +87,14 @@ class ScreenCapturer(
                 }
 
                 override fun onFailure(errorCode: Int) {
+                    android.util.Log.e("SerifuCapture", "takeScreenshot onFailure errorCode=$errorCode")
                     if (cont.isActive) cont.resume(CaptureOutcome.Failed(failureOf(errorCode)))
                 }
             }
             try {
                 service.takeScreenshot(Display.DEFAULT_DISPLAY, captureExecutor, callback)
-            } catch (_: Throwable) {
+            } catch (t: Throwable) {
+                android.util.Log.e("SerifuCapture", "service.takeScreenshot threw", t)
                 if (cont.isActive) cont.resume(CaptureOutcome.Failed(ShotFailure.INTERNAL))
             }
         }

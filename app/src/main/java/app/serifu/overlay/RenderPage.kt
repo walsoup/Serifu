@@ -1,5 +1,6 @@
 package app.serifu.overlay
 
+import android.graphics.Path
 import android.graphics.PointF
 import android.graphics.RectF
 import android.text.StaticLayout
@@ -21,6 +22,7 @@ class RenderBubble(
     val seamless: Boolean,
     var outlineColor: Int,
     val sourceTextForDebug: String,
+    val cleanPath: Path? = null,
 )
 
 class RenderPage(

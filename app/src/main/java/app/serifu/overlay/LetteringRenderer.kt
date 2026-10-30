@@ -2,11 +2,11 @@ package app.serifu.overlay
 
 import android.content.Context
 import android.graphics.Color
+import android.graphics.Path
 import android.graphics.PointF
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.text.LineBreaker
-import android.os.Build
 import android.text.Layout
 import android.text.Spannable
 import android.text.SpannableStringBuilder
@@ -16,6 +16,8 @@ import android.text.style.StyleSpan
 import android.util.TypedValue
 import app.serifu.core.Tuning
 import app.serifu.core.geometry.IntRect
+import app.serifu.core.layout.BalloonBreak
+import app.serifu.core.layout.BubbleClean
 import app.serifu.core.layout.MeasuredLine
 import app.serifu.core.layout.TextFitSearch
 import app.serifu.core.model.BubbleKind
@@ -50,12 +52,13 @@ class LetteringRenderer(context: Context) {
             val raw = translations[cluster.id]?.trim().orEmpty()
             if (raw.isEmpty()) continue
             if (cluster.kind == BubbleKind.SFX && settings.sfxMode == SfxMode.OFF) continue
-            val styled = style(raw, settings.classicCaps && english)
+            val caps = settings.classicCaps && english
+            val styled = style(raw, caps)
             bubbles.add(
                 when (cluster.kind) {
                     BubbleKind.SFX -> sfx(cluster, styled, settings, frameW, frameH)
                     BubbleKind.FREE_TEXT -> tag(cluster, styled, settings, frameW, frameH, seamless = false)
-                    BubbleKind.DIALOGUE, BubbleKind.CAPTION -> dialogue(cluster, styled, settings, frameW, frameH)
+                    BubbleKind.DIALOGUE, BubbleKind.CAPTION -> dialogue(cluster, raw, caps, settings, frameW, frameH)
                 },
             )
         }
@@ -75,30 +78,67 @@ class LetteringRenderer(context: Context) {
 
     private fun dialogue(
         cluster: SpeechBubbleCluster,
-        text: CharSequence,
+        raw: String,
+        caps: Boolean,
         settings: Settings,
         frameW: Int,
         frameH: Int,
     ): RenderBubble {
         val paint = letteringPaint(settings, cluster.textColor)
-        val start = cluster.letteringRect.toRectF()
+        val display = if (caps) raw.uppercase(Locale.ENGLISH) else raw
+        val safe = cluster.letteringRect.toRectF()
+        val clean = if (cluster.kind == BubbleKind.DIALOGUE) {
+            cluster.bubbleMask?.let { mask -> pathOf(BubbleClean.contours(mask, cluster.unionRect)) }
+        } else {
+            null
+        }
+        val organic = clean != null && !clean.isEmpty
+        fun laidOut(size: Float, width: Float): StaticLayout {
+            paint.textSize = size
+            paint.letterSpacing = tracking(display, caps)
+            val broken = BalloonBreak.lines(display, width) { paint.measureText(it) }
+            val joined = if (broken.isEmpty()) display else broken.joinToString("\n")
+            return layout(style(joined, classicCaps = false), paint, width, leading(broken.size))
+        }
         val fit = TextFitSearch.fit(
-            boxWidth = start.width().coerceAtLeast(1f),
-            boxHeight = start.height().coerceAtLeast(1f),
+            boxWidth = safe.width().coerceAtLeast(1f),
+            boxHeight = safe.height().coerceAtLeast(1f),
             minPx = sp(settings.minFontSp),
             maxPx = sp(settings.maxFontSp),
             absoluteMinPx = sp(Tuning.ABSOLUTE_MIN_FONT_SP),
         ) { size, width ->
-            paint.textSize = size
-            val probe = layout(text, paint, width)
+            val probe = laidOut(size, width)
             MeasuredLine(probe.height.toFloat(), midWordBreak(probe))
         }
-        paint.textSize = fit.sizePx
-        val fitted = layout(text, paint, fit.widthPx)
-        val box = place(start.centerX(), start.centerY(), fit.widthPx, fit.heightPx, frameW, frameH)
+        var size = fit.sizePx
+        var width = fit.widthPx
+        if (organic) width = minOf(width, safe.width())
+        var fitted = laidOut(size, width)
+        if (organic) {
+            val floor = sp(Tuning.ABSOLUTE_MIN_FONT_SP)
+            while (fitted.height > safe.height() + 1f && size > floor + 0.49f) {
+                size = (size - 0.5f).coerceAtLeast(floor)
+                fitted = laidOut(size, width)
+                if (size <= floor) break
+            }
+        }
+        val box = place(safe.centerX(), safe.centerY(), if (organic) width else fit.widthPx, if (organic) fitted.height.toFloat() else fit.heightPx, frameW, frameH)
         val patch = RectF(cluster.patchRect.toRectF())
         patch.union(cluster.unionRect.toRectF())
-        patch.union(box)
+        if (!organic) patch.union(box)
+        val origin = if (organic) {
+            val maxX = (frameW - fitted.width).toFloat().coerceAtLeast(0f)
+            val maxY = (frameH - fitted.height).toFloat().coerceAtLeast(0f)
+            PointF(
+                (safe.centerX() - fitted.width / 2f).coerceIn(0f, maxX),
+                (safe.centerY() - fitted.height / 2f).coerceIn(0f, maxY),
+            )
+        } else {
+            PointF(
+                box.left + (box.width() - fitted.width) / 2f,
+                box.top + (box.height() - fitted.height) / 2f,
+            )
+        }
         val corner = dp(
             if (cluster.kind == BubbleKind.CAPTION) Tuning.CAPTION_CORNER_DP else Tuning.DIALOGUE_CORNER_DP,
         )
@@ -110,14 +150,12 @@ class LetteringRenderer(context: Context) {
             fillColor = withAlpha(cluster.fillColor, Tuning.FILL_ALPHA),
             textColor = cluster.textColor,
             layout = fitted,
-            layoutOrigin = PointF(
-                box.left + (box.width() - fitted.width) / 2f,
-                box.top + (box.height() - fitted.height) / 2f,
-            ),
+            layoutOrigin = origin,
             rotationDeg = 0f,
             seamless = true,
             outlineColor = 0,
             sourceTextForDebug = cluster.sourceText,
+            cleanPath = if (organic) clean else null,
         )
     }
 
@@ -256,21 +294,52 @@ class LetteringRenderer(context: Context) {
         return builder
     }
 
-    private fun layout(text: CharSequence, paint: TextPaint, widthPx: Float): StaticLayout {
+    private fun layout(
+        text: CharSequence,
+        paint: TextPaint,
+        widthPx: Float,
+        spacing: Float = Tuning.LINE_SPACING_MULTIPLIER,
+    ): StaticLayout {
         val width = widthPx.roundToInt().coerceAtLeast(1)
         return StaticLayout.Builder.obtain(text, 0, text.length, paint, width)
             .setAlignment(Layout.Alignment.ALIGN_CENTER)
             .setIncludePad(false)
-            .setLineSpacing(0f, Tuning.LINE_SPACING_MULTIPLIER)
-            .setBreakStrategy(LineBreaker.BREAK_STRATEGY_BALANCED)
-            .setHyphenationFrequency(
-                if (Build.VERSION.SDK_INT >= 33) {
-                    Layout.HYPHENATION_FREQUENCY_NORMAL_FAST
-                } else {
-                    Layout.HYPHENATION_FREQUENCY_NORMAL
-                },
-            )
+            .setLineSpacing(0f, spacing)
+            .setBreakStrategy(LineBreaker.BREAK_STRATEGY_SIMPLE)
+            .setHyphenationFrequency(Layout.HYPHENATION_FREQUENCY_NONE)
             .build()
+    }
+
+    private fun pathOf(contours: List<app.serifu.core.layout.CleanContour>): Path {
+        val path = Path()
+        for (contour in contours) {
+            val xy = contour.xy
+            if (xy.size < 6) continue
+            path.moveTo(xy[0], xy[1])
+            var index = 2
+            while (index + 1 < xy.size) {
+                path.lineTo(xy[index], xy[index + 1])
+                index += 2
+            }
+            path.close()
+        }
+        return path
+    }
+
+    /** Open tracking on a short shout, a little air on caps, almost none on a paragraph. */
+    private fun tracking(text: String, caps: Boolean): Float {
+        val letters = text.count { !it.isWhitespace() }
+        return when {
+            letters in 1..10 -> Tuning.LETTER_SPACING_SHOUT
+            caps -> Tuning.LETTER_SPACING_CAPS
+            else -> Tuning.LETTER_SPACING_DIALOGUE
+        }
+    }
+
+    private fun leading(lineCount: Int): Float = when {
+        lineCount >= 5 -> Tuning.BALLOON_LEADING_TIGHT
+        lineCount >= 3 -> Tuning.BALLOON_LEADING_STACKED
+        else -> Tuning.BALLOON_LEADING_OPEN
     }
 
     private fun midWordBreak(fitted: StaticLayout): Boolean {

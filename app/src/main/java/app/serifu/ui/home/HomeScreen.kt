@@ -37,6 +37,10 @@ import app.serifu.ui.design.ActionStyle
 import app.serifu.ui.design.Pill
 import app.serifu.ui.design.ScriptCell
 import app.serifu.ui.design.SealMark
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
+import app.serifu.SerifuApp
 import app.serifu.ui.design.Serifu
 import app.serifu.ui.design.SettingsCard
 import app.serifu.ui.design.SettingLine
@@ -46,6 +50,8 @@ import app.serifu.ui.testpage.TestPageActivity
 @Composable
 fun HomeScreen(viewModel: HomeViewModel, onNavigate: (String) -> Unit) {
     val context = LocalContext.current
+    val app = context.applicationContext as? SerifuApp
+    val isServiceActive by (app?.isServiceActive ?: kotlinx.coroutines.flow.MutableStateFlow(true)).collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val c = Serifu.colors
     val readers = settings.readerPackages.sorted()
@@ -87,6 +93,45 @@ fun HomeScreen(viewModel: HomeViewModel, onNavigate: (String) -> Unit) {
                 )
                 Spacer(Modifier.width(12.dp))
                 SealMark(size = 30.dp)
+            }
+
+            if (!isServiceActive) {
+                Spacer(Modifier.height(16.dp))
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(c.primary.copy(alpha = 0.08f))
+                        .border(1.dp, c.primary.copy(alpha = 0.35f), RoundedCornerShape(8.dp))
+                        .clickable { SerifuApp.openAccessibilitySettings(context) }
+                        .padding(14.dp),
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = "Accessibility Service Inactive",
+                                style = Serifu.type.body.copy(fontWeight = FontWeight.SemiBold),
+                                color = c.primary,
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                text = "Tap to enable Serifu in Android settings to translate screen text.",
+                                style = Serifu.type.caption,
+                                color = c.textSecondary,
+                            )
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Pill(
+                            text = "Enable",
+                            selected = true,
+                            onClick = { SerifuApp.openAccessibilitySettings(context) },
+                        )
+                    }
+                }
             }
 
             Spacer(Modifier.height(24.dp))
@@ -242,6 +287,12 @@ fun HomeScreen(viewModel: HomeViewModel, onNavigate: (String) -> Unit) {
                     onClick = { onNavigate(Routes.onboarding(1)) },
                     style = ActionStyle.Primary,
                 )
+            } else if (!isServiceActive) {
+                ActionButton(
+                    text = "Enable Accessibility Service",
+                    onClick = { SerifuApp.openAccessibilitySettings(context) },
+                    style = ActionStyle.Primary,
+                )
             } else if (settings.mode == TriggerMode.OFF) {
                 ActionButton(
                     text = stringResource(R.string.turn_on),
@@ -252,7 +303,6 @@ fun HomeScreen(viewModel: HomeViewModel, onNavigate: (String) -> Unit) {
                 ActionButton(
                     text = stringResource(R.string.open_test_page),
                     onClick = {
-                        viewModel.update { it.copy(sourceLanguage = SourceLanguage.JA) }
                         context.startActivity(Intent(context, TestPageActivity::class.java))
                     },
                     style = ActionStyle.Primary,
