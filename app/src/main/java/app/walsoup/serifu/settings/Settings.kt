@@ -13,7 +13,7 @@ data class Settings(
     val mode: TriggerMode = TriggerMode.AUTO,
     val sourceLanguage: SourceLanguage = SourceLanguage.JA,
     val targetLanguage: String = "en",
-    val quality: QualityMode = QualityMode.BEST_ONLY,
+    val quality: QualityMode = QualityMode.FAST,
     val settleDelayMs: Int = Tuning.SETTLE_DELAY_DEFAULT_MS,
     val readerPackages: Set<String> = emptySet(),
     val letteringFont: LetteringFont = LetteringFont.COMIC_NEUE,
