@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Keep the API credential (DataStore: serifu_settings) out of backups and device transfers. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="file" path="datastore/serifu_settings.preferences_pb" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="file" path="datastore/serifu_settings.preferences_pb" />
+    </device-transfer>
+</data-extraction-rules>
