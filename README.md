@@ -4,7 +4,7 @@
 
 # Serifu
 
-Serifu translates manga, manhua, and manhwa on an Android phone. It screenshots a reader you choose, finds the bubbles, and draws English over them. Japanese, Chinese, and Korean are translated with ML Kit on the device. The page stays on the phone, and the language pack is a one-time download of about 30 MB.
+Serifu translates manga, manhua, and manhwa on an Android phone. It screenshots a reader you choose, finds the bubbles, and draws English over them. CJK and Latin scripts (Japanese, Chinese, Korean, French, Spanish, German, Italian, Portuguese, Russian) are supported. Offline translation is handled by ML Kit on the device, with an optional OpenAI-compatible cloud backend for LLM translation. The language pack is a one-time download of about 30 MB.
 
 This tree is version 0.5-beta, with `applicationId` `app.serifu` and `minSdk` 30.
 
@@ -14,7 +14,7 @@ Home picks the source script and the trigger. Auto translates after the page sto
 
 <img src="docs/home.png" width="360" alt="Home with Japanese selected">
 
-The sample page is a stick-figure comic inside the app, so the pipeline can run without a reader installed. JA, ZH, and KO swap the page. Translate runs OCR, clustering, translation, and lettering. Boxes draws the regions the clusterer found. Tap the page to hide the toolbar.
+The sample page is a stick-figure comic inside the app, so the pipeline can run without a reader installed. The toolbar swaps between 9 languages (JA, ZH, KO, FR, ES, DE, IT, PT, RU). Translate runs OCR, clustering, translation, and lettering. Boxes draws the regions the clusterer found. Tap the page to hide the toolbar.
 
 <img src="docs/sample.png" width="360" alt="Japanese sample page, with the toolbar under the status bar">
 
@@ -28,7 +28,7 @@ The rest of the settings sit on the home screen, under the trigger.
 | Lettering | Font, size range, sound effects (compact, cover, or off). A fresh install uses 9–22 sp. |
 | Reader apps | Packages Serifu is allowed to screenshot |
 | Behaviour | How long Auto waits after the last scroll (default 450 ms), plus honorifics and the pill |
-| Engine | ML Kit, offline |
+| Engine | ML Kit offline or OpenAI-compatible cloud backend (Fast, Progressive, Best only) |
 | Debug | Region outlines |
 | About | Version and the OFL font licences |
 
@@ -36,7 +36,13 @@ The rest of the settings sit on the home screen, under the trigger.
 
 First launch is four steps: source script, restricted settings when Android requires them for a sideloaded accessibility app, the accessibility service, then the reader apps. The service is what takes the screenshot. While it is off, the bottom button opens accessibility settings. With it on, the button is Read a sample page, unless the trigger is Off, in which case it turns Serifu back to Auto.
 
-Over a chosen reader, a pill sits on the screen edge. A tap translates the current page, and a long-press opens the options.
+Over a chosen reader, a tactile pill sits on the screen edge. A tap translates the current page, while a double-tap opens the floating HUD to swap languages on the fly, adjust trigger modes, or pause translation.
+
+<p align="center">
+  <img src="docs/hud.png" width="340" alt="Floating HUD overlay with language strip and controls">
+  &nbsp;&nbsp;
+  <img src="docs/translated.png" width="340" alt="Translated comic page with knockout SFX and lettering">
+</p>
 
 ## Interfaces
 

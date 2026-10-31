@@ -107,13 +107,13 @@
     <string name="quality_progressive">Progressive</string>
     <string name="quality_best">Best only</string>
     <string name="engine_ai_title">Cloud AI backend</string>
-    <string name="engine_ai_body">Translate with high-quality remote models (e.g. Gemini 2.0 Flash). Free API keys available at aistudio.google.com.</string>
+    <string name="engine_ai_body">Translate with OpenAI-compatible endpoints (OpenAI, OpenRouter, Groq, DeepSeek, Ollama) or remote LLMs.</string>
     <string name="ai_api_key_label">API Key</string>
-    <string name="ai_api_key_placeholder">Paste Google AI Studio or API key</string>
+    <string name="ai_api_key_placeholder">sk-...</string>
     <string name="ai_model_label">Model Name</string>
-    <string name="ai_model_placeholder">gemini-2.0-flash</string>
+    <string name="ai_model_placeholder">gpt-4o-mini</string>
     <string name="ai_endpoint_label">Custom Endpoint (Optional)</string>
-    <string name="ai_endpoint_placeholder">Default Google Gemini REST API</string>
+    <string name="ai_endpoint_placeholder">https://api.openai.com/v1/chat/completions</string>
     <string name="ai_configured">Configured</string>
     <string name="ai_not_configured">Not configured</string>
 

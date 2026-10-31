@@ -97,19 +97,27 @@ class RemoteAiTranslationEngine(
 
     private fun callApi(settings: Settings, prompt: String): String {
         val apiKey = settings.aiApiKey.trim()
-        val model = settings.aiModel.trim().ifEmpty { "gemini-2.0-flash" }
-        val endpoint = settings.aiEndpoint.trim()
+        val model = settings.aiModel.trim().ifEmpty { "gpt-4o-mini" }
+        val rawEndpoint = settings.aiEndpoint.trim()
 
-        val isGemini = endpoint.isEmpty() || endpoint.contains("googleapis.com")
+        val isGemini = rawEndpoint.contains("googleapis.com")
 
-        val targetUrl = if (isGemini) {
-            if (endpoint.isNotEmpty()) {
-                if (endpoint.contains("key=")) endpoint else "$endpoint?key=$apiKey"
-            } else {
-                "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$apiKey"
+        val targetUrl = when {
+            isGemini -> {
+                if (rawEndpoint.contains("key=")) rawEndpoint else "$rawEndpoint?key=$apiKey"
             }
-        } else {
-            endpoint
+            rawEndpoint.isEmpty() -> {
+                "https://api.openai.com/v1/chat/completions"
+            }
+            rawEndpoint.endsWith("/chat/completions") -> {
+                rawEndpoint
+            }
+            rawEndpoint.endsWith("/") -> {
+                "${rawEndpoint}chat/completions"
+            }
+            else -> {
+                "$rawEndpoint/chat/completions"
+            }
         }
 
         val requestBody = if (isGemini) {
