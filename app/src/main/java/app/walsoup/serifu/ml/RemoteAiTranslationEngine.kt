@@ -27,6 +27,7 @@ import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.MessageDigest
 
 class RemoteAiTranslationEngine(
     private val settingsProvider: () -> Settings,
@@ -46,9 +47,18 @@ class RemoteAiTranslationEngine(
     /**
      * Non-secret identity of the remote configuration, mixed into cache keys so a
      * model, endpoint or effort change cannot serve translations from the old config.
+     * The endpoint is hashed so query distinctions (api versions, regions) still
+     * invalidate while credentials like Gemini's ?key= never appear in keys.
      */
     internal fun cacheConfigTag(settings: Settings = settingsProvider()): String =
-        "${settings.aiModel.trim()}|${settings.aiEndpoint.trim().substringBefore('?')}|${settings.reasoningEffort.name}"
+        "${settings.aiModel.trim()}|${endpointFingerprint(settings.aiEndpoint)}|${settings.reasoningEffort.name}"
+
+    private fun endpointFingerprint(endpoint: String): String {
+        val normalized = endpoint.trim()
+        if (normalized.isEmpty()) return ""
+        val digest = MessageDigest.getInstance("SHA-256").digest(normalized.toByteArray(Charsets.UTF_8))
+        return digest.joinToString("") { "%02x".format(it) }.take(16)
+    }
 
     override suspend fun availability(
         source: app.serifu.core.model.SourceLanguage,
