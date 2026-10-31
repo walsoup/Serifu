@@ -69,6 +69,10 @@ class PagePipeline(
         val outcome = SpeechBubbleClusterer.clusterWithVision(retiled, config, vision)
         val clusters = outcome.clusters
         val clustered = now()
+        android.util.Log.d(
+            "Serifu",
+            "clustered ${clusters.size} bubbles in ${clustered - clusterStarted}ms",
+        )
         if (clusters.isEmpty()) {
             return Lettering(null, clustered - clusterStarted, 0, 0, 0, outcome)
         }

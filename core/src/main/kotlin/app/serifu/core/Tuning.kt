@@ -78,6 +78,9 @@ object Tuning {
 
     const val LINE_GROUP_OVERLAP = 0.5f
     const val READING_BAND_FRACTION = 0.15f
+    const val BUBBLE_MERGE_LETTERING_OVERLAP = 0.35f
+    const val BUBBLE_MERGE_PATCH_OVERLAP = 0.40f
+    const val BUBBLE_MERGE_FALLBACK_OVERLAP = 0.50f
 
     const val REGION_EXPAND_CHAR_FACTOR = 3f
     const val REGION_EXPAND_UNION_FACTOR = 0.5f
@@ -119,6 +122,16 @@ object Tuning {
     const val TRANSLATOR_IDLE_MS = 600_000L
     const val PREVIOUS_PAGE_CONTEXT_LINES = 8
     const val MLKIT_PACK_APPROX_BYTES = 30L * 1024 * 1024
+    /**
+     * `downloadModelIfNeeded` waits forever when Wi-Fi is required and absent.
+     * Past this, the page would stay in the source language with no explanation.
+     */
+    const val MLKIT_DOWNLOAD_TIMEOUT_MS = 30_000L
+    /**
+     * A mask this many times the text's own box has flooded the page.
+     * A real balloon stays well under it; painting the page covers the art.
+     */
+    const val REGION_MASK_AREA_FACTOR = 12f
     /** Per-bubble cap once this language pair has completed one translation. */
     const val MLKIT_TRANSLATE_TIMEOUT_MS = 4_000L
     /**

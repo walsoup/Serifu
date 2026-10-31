@@ -43,7 +43,11 @@ object BubbleClean {
         var current = ArrayList<RowEdge>()
         var pendingGap = 0
         for (row in 0 until mask.height) {
-            if (mask.isEmptyRow(row)) {
+            val yTop = (mask.y0 + row) * mask.scale.toFloat()
+            val overlaps = yTop + mask.scale > coverBox.top && yTop < coverBox.bottom
+            // Bold CJK fills its rows with ink, so the flood never marks them.
+            // Keep those rows in the balloon or the source shows through the English.
+            if (mask.isEmptyRow(row) && !overlaps) {
                 pendingGap++
                 if (pendingGap > 1 && current.isNotEmpty()) {
                     runs.add(current)
@@ -52,10 +56,8 @@ object BubbleClean {
                 continue
             }
             pendingGap = 0
-            val rawLeft = mask.minX[row] * mask.scale.toFloat()
-            val rawRight = (mask.maxX[row] + 1) * mask.scale.toFloat()
-            val yTop = (mask.y0 + row) * mask.scale.toFloat()
-            val overlaps = yTop + mask.scale > coverBox.top && yTop < coverBox.bottom
+            val rawLeft = if (mask.isEmptyRow(row)) coverBox.left.toFloat() else mask.minX[row] * mask.scale.toFloat()
+            val rawRight = if (mask.isEmptyRow(row)) coverBox.right.toFloat() else (mask.maxX[row] + 1) * mask.scale.toFloat()
             val edged = edge(rawLeft, rawRight, overlaps, coverBox, cap, inset)
             if (edged.second - edged.first < 1f) continue
             current.add(

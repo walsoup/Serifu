@@ -10,3 +10,7 @@ captures/
 *.ap_
 .externalNativeBuild/
 .kotlin/
+
+# Release signing. The keystore and .env never belong in git.
+.env
+signing/

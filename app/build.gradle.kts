@@ -8,6 +8,18 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+/** Local signing values from `.env`. Missing file means the release build stays on the debug key. */
+fun loadDotEnv(file: java.io.File): Map<String, String> {
+    if (!file.exists()) return emptyMap()
+    return file.readLines().mapNotNull { raw ->
+        val line = raw.trim()
+        if (line.isEmpty() || line.startsWith("#") || "=" !in line) return@mapNotNull null
+        val key = line.substringBefore("=").trim()
+        val value = line.substringAfter("=").trim().removeSurrounding("\"")
+        key to value
+    }.toMap()
+}
+
 android {
     namespace = "app.serifu"
     // The spec pins compileSdk 36. Compose 1.12.1, Navigation 2.10.2 and core-ktx 1.19.1
@@ -23,6 +35,20 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    val dotEnv = loadDotEnv(rootProject.file(".env"))
+    val releaseKeystore = dotEnv["KEYSTORE_FILE"]?.let { file(it) }?.takeIf { it.isFile }
+
+    signingConfigs {
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = releaseKeystore
+                storePassword = dotEnv["KEYSTORE_PASSWORD"]
+                keyAlias = dotEnv["KEY_ALIAS"]
+                keyPassword = dotEnv["KEY_PASSWORD"]
+            }
+        }
+    }
+
     buildTypes {
         debug {
             ndk {
@@ -32,7 +58,11 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (releaseKeystore != null) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",

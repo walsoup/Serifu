@@ -105,7 +105,33 @@ object SpeechBubbleClusterer {
         val enriched = prelim.map { part ->
             enrich(part, config, vision, medianChar)
         }
-        val sorted = ReadingOrder.sort(enriched, config.source, config.frameHeight)
+        val merged = if (enriched.size <= 1) {
+            enriched
+        } else {
+            val mergeUf = UnionFind(enriched.size)
+            for (i in enriched.indices) {
+                for (j in i + 1 until enriched.size) {
+                    if (sharesBubble(enriched[i], enriched[j])) {
+                        mergeUf.union(i, j)
+                    }
+                }
+            }
+            mergeUf.groups().map { group ->
+                if (group.size == 1) {
+                    enriched[group[0]]
+                } else {
+                    val combinedLines = group.flatMap { prelim[it].filteredMembers }
+                        .distinctBy { it.line.box }
+                    val mergedPrelim = prelimBuild(combinedLines, config, frame)
+                    if (mergedPrelim != null) {
+                        enrich(mergedPrelim, config, vision, medianChar)
+                    } else {
+                        enriched[group[0]]
+                    }
+                }
+            }
+        }
+        val sorted = ReadingOrder.sort(merged, config.source, config.frameHeight)
             .mapIndexed { index, cluster -> cluster.copy(id = index) }
         return ClusterOutcome(sorted, walls, furigana.dropped.map { it.line })
     }
@@ -119,6 +145,7 @@ object SpeechBubbleClusterer {
         val angleDeg: Float,
         val rotated: Boolean,
         val members: List<OcrLine>,
+        val filteredMembers: List<FilteredLine>,
     )
 
     private fun prelimBuild(members: List<FilteredLine>, config: ClusterConfig, frame: IntRect): Prelim? {
@@ -140,6 +167,7 @@ object SpeechBubbleClusterer {
             angleDeg = anchor.line.angleDeg,
             rotated = members.all { it.rotated },
             members = lines,
+            filteredMembers = members,
         )
     }
 
@@ -267,5 +295,46 @@ object SpeechBubbleClusterer {
         val dx = (a.centerX - b.centerX).toFloat()
         val dy = (a.centerY - b.centerY).toFloat()
         return sqrt(dx * dx + dy * dy)
+    }
+
+    private fun sharesBubble(a: SpeechBubbleCluster, b: SpeechBubbleCluster): Boolean {
+        if (a.kind != b.kind) {
+            if (a.kind == BubbleKind.SFX || b.kind == BubbleKind.SFX) {
+                if (a.bubbleMask == null || b.bubbleMask == null) return false
+                val small = min(a.charSizePx, b.charSizePx)
+                val large = max(a.charSizePx, b.charSizePx)
+                if (small <= 0f || large / small > Tuning.SIZE_COMPAT_RATIO) return false
+            }
+        }
+
+        val patchInter = a.patchRect.intersect(b.patchRect)
+        if (patchInter.isEmpty) return false
+        val patchInterArea = patchInter.width.toLong() * patchInter.height.toLong()
+        val minPatchArea = minOf(
+            a.patchRect.width.toLong() * a.patchRect.height.toLong(),
+            b.patchRect.width.toLong() * b.patchRect.height.toLong(),
+        )
+        if (minPatchArea <= 0L) return false
+
+        val letteringInter = a.letteringRect.intersect(b.letteringRect)
+        val letteringInterArea = if (letteringInter.isEmpty) 0L else letteringInter.width.toLong() * letteringInter.height.toLong()
+        val minLetteringArea = minOf(
+            a.letteringRect.width.toLong() * a.letteringRect.height.toLong(),
+            b.letteringRect.width.toLong() * b.letteringRect.height.toLong(),
+        )
+
+        val letteringOverlap = if (minLetteringArea > 0L) letteringInterArea.toFloat() / minLetteringArea.toFloat() else 0f
+        val patchOverlap = patchInterArea.toFloat() / minPatchArea.toFloat()
+
+        val aCenterInB = b.patchRect.contains(a.unionRect.centerX, a.unionRect.centerY) ||
+            b.letteringRect.contains(a.unionRect.centerX, a.unionRect.centerY)
+        val bCenterInA = a.patchRect.contains(b.unionRect.centerX, b.unionRect.centerY) ||
+            a.letteringRect.contains(b.unionRect.centerX, b.unionRect.centerY)
+
+        val maskPresent = a.bubbleMask != null || b.bubbleMask != null
+        val letteringThreshold = if (maskPresent) Tuning.BUBBLE_MERGE_LETTERING_OVERLAP else Tuning.BUBBLE_MERGE_FALLBACK_OVERLAP
+        val patchThreshold = if (maskPresent) Tuning.BUBBLE_MERGE_PATCH_OVERLAP else Tuning.BUBBLE_MERGE_FALLBACK_OVERLAP
+
+        return letteringOverlap >= letteringThreshold || patchOverlap >= patchThreshold || (aCenterInB && bCenterInA)
     }
 }

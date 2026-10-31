@@ -2,6 +2,8 @@ package app.serifu.overlay
 
 import android.accessibilityservice.AccessibilityService
 import android.graphics.PixelFormat
+import android.hardware.display.DisplayManager
+import android.view.Display
 import android.view.Gravity
 import android.view.Surface
 import android.view.View
@@ -189,7 +191,15 @@ class OverlayManager(
         return VerticalInsets(insets?.top ?: 0, insets?.bottom ?: 0)
     }
 
-    fun rotation(): Int = service.display?.rotation ?: Surface.ROTATION_0
+    /**
+     * AccessibilityService is not a visual context on Android 11+, so `service.display`
+     * throws. Ask DisplayManager for the default display instead.
+     */
+    fun rotation(): Int {
+        val display = service.getSystemService(DisplayManager::class.java)
+            ?.getDisplay(Display.DEFAULT_DISPLAY)
+        return display?.rotation ?: Surface.ROTATION_0
+    }
 
     override fun geometry(): ScreenGeometry {
         val bounds = wm.currentWindowMetrics.bounds

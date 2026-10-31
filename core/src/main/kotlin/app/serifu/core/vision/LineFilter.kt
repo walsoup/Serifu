@@ -32,7 +32,10 @@ object LineFilter {
             if (text.isEmpty() || punctuationOnly.matches(text)) return@mapNotNull null
             // A recognizer with no confidence score reports 0 for every line. Dropping those would erase the page.
             if (line.confidence > 0f && line.confidence < Tuning.LINE_MIN_CONFIDENCE) return@mapNotNull null
-            if (skipLatin && (latinOnly.matches(text) || !hasCjk.containsMatchIn(text))) return@mapNotNull null
+            val cjkCount = hasCjk.findAll(text).count()
+            if (skipLatin && (latinOnly.matches(text) || cjkCount == 0 || (text.length >= 4 && cjkCount.toFloat() / text.length < 0.25f))) {
+                return@mapNotNull null
+            }
             if (pill != null && !pill.isEmpty && pill.contains(box)) return@mapNotNull null
             val orientation = orientationOf(line)
             FilteredLine(

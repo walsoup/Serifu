@@ -26,4 +26,22 @@ class BubbleCleanTest {
         assertTrue(contour.contains(glyphs.centerX.toFloat(), glyphs.centerY.toFloat()))
         assertFalse(contour.contains(4f, 4f))
     }
+
+    @Test
+    fun glyphRowsThatTheFloodMissedStayCovered() {
+        val height = 30
+        val minX = IntArray(height) { -1 }
+        val maxX = IntArray(height) { -1 }
+        for (row in 0 until height) {
+            if (row in 12 until 20) continue
+            val t = (row - 15) / 15.0
+            val half = (12 * sqrt(1.0 - t * t)).toInt().coerceAtLeast(2)
+            minX[row] = 20 - half
+            maxX[row] = 20 + half
+        }
+        val mask = RowSpans(0, 0, 40, height, minX, maxX, scale = 4)
+        val glyphs = IntRect(64, 52, 104, 76)
+        val contour = BubbleClean.contours(mask, glyphs).single()
+        assertTrue(contour.contains(glyphs.centerX.toFloat(), glyphs.centerY.toFloat()))
+    }
 }

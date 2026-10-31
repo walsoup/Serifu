@@ -18,8 +18,6 @@ import app.serifu.core.Tuning
 import app.serifu.core.geometry.IntRect
 import app.serifu.core.layout.BalloonBreak
 import app.serifu.core.layout.BubbleClean
-import app.serifu.core.layout.MeasuredLine
-import app.serifu.core.layout.TextFitSearch
 import app.serifu.core.model.BubbleKind
 import app.serifu.core.model.SfxMode
 import app.serifu.core.vision.OcrLine
@@ -87,11 +85,12 @@ class LetteringRenderer(context: Context) {
         val paint = letteringPaint(settings, cluster.textColor)
         val display = if (caps) raw.uppercase(Locale.ENGLISH) else raw
         val safe = cluster.letteringRect.toRectF()
-        val clean = if (cluster.kind == BubbleKind.DIALOGUE) {
-            cluster.bubbleMask?.let { mask -> pathOf(BubbleClean.contours(mask, cluster.unionRect)) }
+        val contours = if (cluster.kind == BubbleKind.DIALOGUE) {
+            cluster.bubbleMask?.let { BubbleClean.contours(it, cluster.unionRect) }
         } else {
             null
         }
+        val clean = contours?.let { pathOf(it) }
         val organic = clean != null && !clean.isEmpty
         fun laidOut(size: Float, width: Float): StaticLayout {
             paint.textSize = size
@@ -100,45 +99,24 @@ class LetteringRenderer(context: Context) {
             val joined = if (broken.isEmpty()) display else broken.joinToString("\n")
             return layout(style(joined, classicCaps = false), paint, width, leading(broken.size))
         }
-        val fit = TextFitSearch.fit(
-            boxWidth = safe.width().coerceAtLeast(1f),
-            boxHeight = safe.height().coerceAtLeast(1f),
-            minPx = sp(settings.minFontSp),
-            maxPx = sp(settings.maxFontSp),
-            absoluteMinPx = sp(Tuning.ABSOLUTE_MIN_FONT_SP),
-        ) { size, width ->
-            val probe = laidOut(size, width)
-            MeasuredLine(probe.height.toFloat(), midWordBreak(probe))
+        // The text never leaves the lettering box. Start at the largest allowed size
+        // and step down until the wrapped text fits inside it; no growing past it.
+        val box = safe
+        val boxWidth = box.width().coerceAtLeast(1f)
+        val floor = sp(Tuning.ABSOLUTE_MIN_FONT_SP)
+        var size = sp(settings.maxFontSp)
+        var fitted = laidOut(size, boxWidth)
+        while (!fitsIn(fitted, box) && size > floor) {
+            size = (size - 0.5f).coerceAtLeast(floor)
+            fitted = laidOut(size, boxWidth)
         }
-        var size = fit.sizePx
-        var width = fit.widthPx
-        if (organic) width = minOf(width, safe.width())
-        var fitted = laidOut(size, width)
-        if (organic) {
-            val floor = sp(Tuning.ABSOLUTE_MIN_FONT_SP)
-            while (fitted.height > safe.height() + 1f && size > floor + 0.49f) {
-                size = (size - 0.5f).coerceAtLeast(floor)
-                fitted = laidOut(size, width)
-                if (size <= floor) break
-            }
-        }
-        val box = place(safe.centerX(), safe.centerY(), if (organic) width else fit.widthPx, if (organic) fitted.height.toFloat() else fit.heightPx, frameW, frameH)
         val patch = RectF(cluster.patchRect.toRectF())
         patch.union(cluster.unionRect.toRectF())
         if (!organic) patch.union(box)
-        val origin = if (organic) {
-            val maxX = (frameW - fitted.width).toFloat().coerceAtLeast(0f)
-            val maxY = (frameH - fitted.height).toFloat().coerceAtLeast(0f)
-            PointF(
-                (safe.centerX() - fitted.width / 2f).coerceIn(0f, maxX),
-                (safe.centerY() - fitted.height / 2f).coerceIn(0f, maxY),
-            )
-        } else {
-            PointF(
-                box.left + (box.width() - fitted.width) / 2f,
-                box.top + (box.height() - fitted.height) / 2f,
-            )
-        }
+        val origin = PointF(
+            box.left + (box.width() - fitted.width) / 2f,
+            box.top + (box.height() - fitted.height) / 2f,
+        )
         val corner = dp(
             if (cluster.kind == BubbleKind.CAPTION) Tuning.CAPTION_CORNER_DP else Tuning.DIALOGUE_CORNER_DP,
         )
@@ -166,8 +144,7 @@ class LetteringRenderer(context: Context) {
         frameW: Int,
         frameH: Int,
     ): RenderBubble {
-        val cover = settings.sfxMode == SfxMode.COVER
-        return tag(cluster, text, settings, frameW, frameH, seamless = false, cover = cover)
+        return tag(cluster, text, settings, frameW, frameH, seamless = false)
     }
 
     private fun tag(
@@ -177,7 +154,6 @@ class LetteringRenderer(context: Context) {
         frameW: Int,
         frameH: Int,
         seamless: Boolean,
-        cover: Boolean = false,
     ): RenderBubble {
         val paint = TextPaint(TextPaint.ANTI_ALIAS_FLAG).apply {
             isSubpixelText = true
@@ -190,52 +166,54 @@ class LetteringRenderer(context: Context) {
         }
         val minSp = if (cluster.kind == BubbleKind.SFX) Tuning.SFX_MIN_SP else settings.minFontSp
         val maxSp = if (cluster.kind == BubbleKind.SFX) Tuning.SFX_MAX_SP else settings.maxFontSp
-        val limit = if (cover) cluster.patchRect.toRectF() else RectF(0f, 0f, frameW * 0.46f, sp(maxSp) * 2.4f)
-        val fit = TextFitSearch.fit(
-            boxWidth = limit.width().coerceAtLeast(1f),
-            boxHeight = limit.height().coerceAtLeast(1f),
-            minPx = sp(minSp),
-            maxPx = sp(maxSp),
-            absoluteMinPx = sp(minOf(minSp, Tuning.ABSOLUTE_MIN_FONT_SP)),
-        ) { size, width ->
-            paint.textSize = size
-            val probe = layout(text, paint, width)
-            MeasuredLine(probe.height.toFloat(), midWordBreak(probe))
-        }
-        paint.textSize = fit.sizePx
-        val fitted = layout(text, paint, fit.widthPx)
+        // A tag never leaves the lettering box. It sits on the detected text, and
+        // the font shrinks until the wrapped text fits inside that box.
+        val area = cluster.letteringRect.toRectF()
+        val union = cluster.unionRect.toRectF()
         val padX = dp(Tuning.TAG_PAD_HORIZONTAL_DP)
         val padY = dp(Tuning.TAG_PAD_VERTICAL_DP)
-        val tagW = fitted.width + padX * 2f
-        val tagH = fitted.height + padY * 2f
-        val patch = if (cover) {
-            val box = place(
-                cluster.patchRect.centerX.toFloat(),
-                cluster.patchRect.centerY.toFloat(),
-                maxOf(fit.widthPx, cluster.patchRect.width.toFloat()),
-                maxOf(fit.heightPx, cluster.patchRect.height.toFloat()),
-                frameW,
-                frameH,
-            )
-            box.union(cluster.unionRect.toRectF())
-            box
-        } else {
-            val anchor = cluster.unionRect
-            var left = anchor.right + dp(Tuning.PATCH_PAD_DP)
-            if (left + tagW > frameW) left = anchor.left - tagW - dp(Tuning.PATCH_PAD_DP)
-            val top = anchor.centerY - tagH / 2f
-            place(left + tagW / 2f, top + tagH / 2f, tagW, tagH, frameW, frameH)
+        val maxW = (area.width() - padX * 2f).coerceAtLeast(1f)
+        val maxH = (area.height() - padY * 2f).coerceAtLeast(1f)
+        val floor = sp(minOf(minSp, Tuning.ABSOLUTE_MIN_FONT_SP))
+        var size = sp(maxSp)
+        paint.textSize = size
+        var fitted = layout(text, paint, maxW)
+        while (!(fitted.height <= maxH && !midWordBreak(fitted)) && size > floor) {
+            size = (size - 0.5f).coerceAtLeast(floor)
+            paint.textSize = size
+            fitted = layout(text, paint, maxW)
         }
+        // Hug the text: the tag is only as wide as its longest line, so it does not
+        // paint over more art than the words need.
+        var lineMax = 0f
+        for (line in 0 until fitted.lineCount) lineMax = maxOf(lineMax, fitted.getLineWidth(line))
+        val tagW = (lineMax + padX * 2f).coerceAtMost(area.width())
+        val tagH = (fitted.height + padY * 2f).coerceAtMost(area.height())
+        val left = (union.centerX() - tagW / 2f).coerceIn(area.left, (area.right - tagW).coerceAtLeast(area.left))
+        val top = (union.centerY() - tagH / 2f).coerceIn(area.top, (area.bottom - tagH).coerceAtLeast(area.top))
+        val box = RectF(left, top, left + tagW, top + tagH)
+        // The plate has to hide the source ink, which can be larger than the
+        // translation and sits a little outside the OCR box once it is rotated.
+        val slop = maxOf(dp(4f), cluster.charSizePx * 0.35f)
+        val source = RectF(union)
+        source.inset(-slop, -slop)
+        box.union(source)
+        // The layout is maxW wide with centred lines, so centre it on the plate.
+        val origin = PointF(
+            box.centerX() - fitted.width / 2f,
+            box.centerY() - fitted.height / 2f,
+        )
         val rotation = cluster.angleDeg.coerceIn(-Tuning.SFX_ANGLE_CLAMP_DEG, Tuning.SFX_ANGLE_CLAMP_DEG)
+        val fillAlpha = 255
         return RenderBubble(
             id = cluster.id,
             kind = cluster.kind,
-            patch = patch,
+            patch = box,
             patchCornerPx = dp(Tuning.TAG_CORNER_DP),
-            fillColor = withAlpha(Tuning.INK_ARGB, (Tuning.TAG_ALPHA * 255f).roundToInt()),
+            fillColor = withAlpha(Tuning.INK_ARGB, fillAlpha),
             textColor = Tuning.PAPER_ARGB,
             layout = fitted,
-            layoutOrigin = PointF(patch.left + padX, patch.top + padY),
+            layoutOrigin = origin,
             rotationDeg = if (cluster.kind == BubbleKind.SFX) rotation else 0f,
             seamless = seamless,
             outlineColor = 0,
@@ -243,7 +221,8 @@ class LetteringRenderer(context: Context) {
         )
     }
 
-    private fun markOverlaps(bubbles: List<RenderBubble>) {
+    private fun markOverlaps(bubbles: MutableList<RenderBubble>) {
+        val toRemove = mutableSetOf<Int>()
         for (left in bubbles.indices) {
             for (right in left + 1 until bubbles.size) {
                 val a = bubbles[left]
@@ -254,7 +233,37 @@ class LetteringRenderer(context: Context) {
                 if (smaller <= 0f || overlap <= Tuning.OVERLAP_OUTLINE_FRACTION * smaller) continue
                 a.outlineColor = outlineFor(a.fillColor)
                 b.outlineColor = outlineFor(b.fillColor)
+
+                // If two bubbles overlap heavily (> 60%), check for text collisions
+                if (overlap > 0.60f * smaller) {
+                    val textA = a.layout.text.toString().trim()
+                    val textB = b.layout.text.toString().trim()
+                    if (textA.equals(textB, ignoreCase = true) || textA.contains(textB)) {
+                        toRemove.add(right)
+                    } else if (textB.contains(textA)) {
+                        toRemove.add(left)
+                    } else {
+                        // Offset layouts vertically so characters never overlap
+                        val topA = a.layoutOrigin.y
+                        val bottomA = topA + a.layout.height
+                        val topB = b.layoutOrigin.y
+                        val bottomB = topB + b.layout.height
+                        if (topB < bottomA && bottomB > topA) {
+                            val shift = (bottomA - topB) + 4f
+                            if (topB + shift + b.layout.height <= b.patch.bottom) {
+                                b.layoutOrigin.y += shift
+                            } else if (a.layoutOrigin.y - shift >= a.patch.top) {
+                                a.layoutOrigin.y -= shift
+                            }
+                        }
+                    }
+                }
             }
+        }
+        if (toRemove.isNotEmpty()) {
+            val survivors = bubbles.filterIndexed { index, _ -> index !in toRemove }
+            bubbles.clear()
+            bubbles.addAll(survivors)
         }
     }
 
@@ -356,13 +365,9 @@ class LetteringRenderer(context: Context) {
         return false
     }
 
-    private fun place(centerX: Float, centerY: Float, width: Float, height: Float, frameW: Int, frameH: Int): RectF {
-        var left = centerX - width / 2f
-        var top = centerY - height / 2f
-        if (width <= frameW) left = left.coerceIn(0f, frameW - width)
-        if (height <= frameH) top = top.coerceIn(0f, frameH - height)
-        return RectF(left, top, left + width, top + height)
-    }
+    /** Wrapped text is within [box] vertically and no word is broken mid-way. */
+    private fun fitsIn(laid: StaticLayout, box: RectF): Boolean =
+        laid.height <= box.height() + 0.5f && !midWordBreak(laid)
 
     private fun overlapArea(a: RectF, b: RectF): Float {
         val width = minOf(a.right, b.right) - maxOf(a.left, b.left)

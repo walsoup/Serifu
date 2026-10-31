@@ -70,8 +70,21 @@ class MlKitTranslationEngine(
             val conditions = DownloadConditions.Builder().apply {
                 if (wifiOnly()) requireWifi()
             }.build()
+            android.util.Log.d(
+                "MlKitTranslate",
+                "download ${request.source.tag}->${request.target} wifiOnly=${wifiOnly()}",
+            )
             try {
-                slot.translator.downloadModelIfNeeded(conditions).await()
+                kotlinx.coroutines.withTimeout(Tuning.MLKIT_DOWNLOAD_TIMEOUT_MS) {
+                    slot.translator.downloadModelIfNeeded(conditions).await()
+                }
+            } catch (timedOut: kotlinx.coroutines.TimeoutCancellationException) {
+                android.util.Log.w(
+                    "MlKitTranslate",
+                    "download timed out after ${Tuning.MLKIT_DOWNLOAD_TIMEOUT_MS}ms " +
+                        "(${request.source.tag}, wifiOnly=${wifiOnly()})",
+                )
+                throw TranslationUnavailable(request.source.englishName)
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled
             } catch (t: Throwable) {

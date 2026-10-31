@@ -66,7 +66,9 @@ class SerifuAccessibilityService : AccessibilityService() {
             capturer = ScreenCapturer(this, overlays, FrameConverter())
         }
         translator = MlKitTranslationEngine(
-            wifiOnly = { app.settingsRepository.settings.value?.wifiOnlyDownloads != false },
+            // Null means the store has not emitted yet. The default is to allow
+            // mobile data; only an explicit opt-in should wait for Wi-Fi.
+            wifiOnly = { app.settingsRepository.settings.value?.wifiOnlyDownloads == true },
         )
         val reading = TranslationCoordinator(
             scope = scope,

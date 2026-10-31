@@ -196,6 +196,8 @@ class TranslationCanvasView(context: Context) : View(context) {
             if (bubble.rotationDeg != 0f) {
                 canvas.rotate(bubble.rotationDeg, bubble.patch.centerX(), bubble.patch.centerY())
             }
+            // Lettering never leaves the box it was detected in.
+            canvas.clipRect(bubble.patch)
             canvas.translate(bubble.layoutOrigin.x, bubble.layoutOrigin.y)
             bubble.layout.draw(canvas)
             canvas.restore()
