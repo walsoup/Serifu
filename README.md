@@ -14,7 +14,7 @@ Home picks the source script and the trigger. Auto translates after the page sto
 
 <img src="docs/home.png" width="360" alt="Home with Japanese selected">
 
-The sample page is a stick-figure comic inside the app, so the pipeline can run without a reader installed. The toolbar swaps between 9 languages (JA, ZH, KO, FR, ES, DE, IT, PT, RU). Translate runs OCR, clustering, translation, and lettering. Boxes draws the regions the clusterer found. Tap the page to hide the toolbar.
+The sample page includes the full Volume 1 of *Say Hello to Black Jack* (ブラックジャックによろしく, 209 pages, public domain / 二次利用フリー) for vertical-scroll reading and live lettering, as well as a multi-language stick-figure comic test page. Translate runs OCR, clustering, translation, and lettering. Boxes draws the regions the clusterer found. Tap the page to hide the toolbar.
 
 <img src="docs/sample.png" width="360" alt="Japanese sample page, with the toolbar under the status bar">
 

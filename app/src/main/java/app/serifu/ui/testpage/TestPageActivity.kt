@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.ui.res.painterResource
@@ -136,10 +137,20 @@ private fun ReaderPage(
     val settings = settingsState ?: Settings()
     val isServiceActive by (app?.isServiceActive ?: MutableStateFlow(true))
         .collectAsState(initial = true)
+    var viewMode by remember {
+        mutableStateOf(
+            if (requestedLanguage != null || startBottom) MangaViewMode.STICK_SAMPLE else MangaViewMode.BLACK_JACK
+        )
+    }
+    val mangaListState = rememberLazyListState()
     // A requested language (the pipeline test) wins. Otherwise follow the user's script,
     // and a pill choice sticks for this page without rewriting settings on open.
     var chosenLanguage by remember { mutableStateOf(requestedLanguage) }
-    val selectedLanguage = chosenLanguage ?: settings.sourceLanguage
+    val selectedLanguage = if (viewMode == MangaViewMode.BLACK_JACK) {
+        SourceLanguage.JA
+    } else {
+        chosenLanguage ?: settings.sourceLanguage
+    }
     var showToolbar by remember { mutableStateOf(true) }
     val c = Serifu.colors
     val scroll = rememberScrollState()
@@ -193,14 +204,22 @@ private fun ReaderPage(
                     Spacer(Modifier.width(4.dp))
                     Column(Modifier.weight(1f)) {
                         Text(
-                            text = chapterTitle(selectedLanguage),
+                            text = if (viewMode == MangaViewMode.BLACK_JACK) {
+                                stringResource(R.string.sample_blackjack_title)
+                            } else {
+                                chapterTitle(selectedLanguage)
+                            },
                             style = Serifu.type.headline.copy(fontSize = 17.sp),
                             color = c.text,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
                         Text(
-                            text = selectedLanguage.englishName,
+                            text = if (viewMode == MangaViewMode.BLACK_JACK) {
+                                stringResource(R.string.sample_blackjack_subtitle)
+                            } else {
+                                selectedLanguage.englishName
+                            },
                             style = Serifu.type.caption,
                             color = c.textSecondary,
                             maxLines = 1,
@@ -263,41 +282,79 @@ private fun ReaderPage(
                         .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    SourceLanguage.entries.forEach { lang ->
-                        Pill(
-                            text = lang.tag.uppercase(),
-                            selected = selectedLanguage == lang,
-                            onClick = {
-                                chosenLanguage = lang
-                                val service = SerifuAccessibilityService.instance
-                                if (isServiceActive && service?.coordinator != null) {
-                                    scope.launch {
-                                        showToolbar = false
-                                        scroll.scrollTo(0)
-                                        app?.settingsRepository?.update { it.copy(sourceLanguage = lang) }
-                                        kotlinx.coroutines.delay(400)
-                                        service.coordinator?.onPillTap()
+                    Pill(
+                        text = stringResource(R.string.sample_mode_manga),
+                        selected = viewMode == MangaViewMode.BLACK_JACK,
+                        onClick = {
+                            viewMode = MangaViewMode.BLACK_JACK
+                            chosenLanguage = SourceLanguage.JA
+                        },
+                    )
+                    Pill(
+                        text = stringResource(R.string.sample_mode_stick),
+                        selected = viewMode == MangaViewMode.STICK_SAMPLE,
+                        onClick = {
+                            viewMode = MangaViewMode.STICK_SAMPLE
+                        },
+                    )
+                    if (viewMode == MangaViewMode.STICK_SAMPLE) {
+                        SourceLanguage.entries.forEach { lang ->
+                            Pill(
+                                text = lang.tag.uppercase(),
+                                selected = selectedLanguage == lang,
+                                onClick = {
+                                    chosenLanguage = lang
+                                    val service = SerifuAccessibilityService.instance
+                                    if (isServiceActive && service?.coordinator != null) {
+                                        scope.launch {
+                                            showToolbar = false
+                                            scroll.scrollTo(0)
+                                            app?.settingsRepository?.update { it.copy(sourceLanguage = lang) }
+                                            kotlinx.coroutines.delay(400)
+                                            service.coordinator?.onPillTap()
+                                        }
                                     }
-                                }
-                            },
-                        )
+                                },
+                            )
+                        }
                     }
                 }
             }
         }
 
-        Box(
-            Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                ) { showToolbar = !showToolbar }
-                .verticalScroll(scroll),
-        ) {
-            Crossfade(targetState = selectedLanguage, label = "sample_page") { lang ->
-                SamplePage(language = lang, modifier = Modifier.fillMaxWidth())
+        when (viewMode) {
+            MangaViewMode.BLACK_JACK -> {
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                ) {
+                    MangaReader(
+                        modifier = Modifier.fillMaxSize(),
+                        lazyListState = mangaListState,
+                        onPageClick = { showToolbar = !showToolbar },
+                    )
+                }
+            }
+            MangaViewMode.STICK_SAMPLE -> {
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                        ) { showToolbar = !showToolbar }
+                        .verticalScroll(scroll),
+                ) {
+                    Crossfade(targetState = selectedLanguage, label = "sample_page") { lang ->
+                        SamplePage(
+                            language = lang,
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = { showToolbar = !showToolbar },
+                        )
+                    }
+                }
             }
         }
     }

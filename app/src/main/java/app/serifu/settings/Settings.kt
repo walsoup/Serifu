@@ -32,6 +32,6 @@ data class Settings(
     val dynamicColor: Boolean = false,
     val onboardingDone: Boolean = true,
     val aiApiKey: String = "",
-    val aiModel: String = "gpt-4o-mini",
+    val aiModel: String = "gpt-6.1-luna",
     val aiEndpoint: String = "",
 )

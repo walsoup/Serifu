@@ -111,7 +111,7 @@
     <string name="ai_api_key_label">API Key</string>
     <string name="ai_api_key_placeholder">sk-...</string>
     <string name="ai_model_label">Model Name</string>
-    <string name="ai_model_placeholder">gpt-4o-mini</string>
+    <string name="ai_model_placeholder">gpt-6.1-luna</string>
     <string name="ai_endpoint_label">Custom Endpoint (Optional)</string>
     <string name="ai_endpoint_placeholder">https://api.openai.com/v1/chat/completions</string>
     <string name="ai_configured">Configured</string>
@@ -260,4 +260,8 @@
     <string name="sample_chapter_ja">水やり</string>
     <string name="sample_chapter_ko">물주기</string>
     <string name="sample_chapter_zh">浇水</string>
+    <string name="sample_mode_manga">Black Jack (209p)</string>
+    <string name="sample_mode_stick">Stick comic</string>
+    <string name="sample_blackjack_title">ブラックジャックによろしく</string>
+    <string name="sample_blackjack_subtitle">第1巻 · 209P · 佐藤秀峰</string>
 </resources>
