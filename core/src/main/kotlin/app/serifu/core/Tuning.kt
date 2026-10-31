@@ -163,7 +163,7 @@ object Tuning {
     const val BALLOON_LEADING_OPEN = 1.0f
     const val BALLOON_LEADING_STACKED = 0.92f
     const val BALLOON_LEADING_TIGHT = 0.88f
-    const val DIALOGUE_CORNER_DP = 8f
+    const val DIALOGUE_CORNER_DP = 14f
     const val CAPTION_CORNER_DP = 2f
     const val PATCH_EDGE_STROKE_DP = 1.5f
     const val PATCH_EDGE_STROKE_ALPHA = 128
@@ -185,8 +185,8 @@ object Tuning {
     const val UPGRADE_CROSSFADE_MS = 150
     const val PEEK_HIDE_MS = 80
     const val PEEK_SHOW_MS = 120
-    const val HUD_DISMISS_MS = 4_000L
-    const val HUD_WIDTH_DP = 232
+    const val HUD_DISMISS_MS = 6_000L
+    const val HUD_WIDTH_DP = 264
     const val HUD_ROW_HEIGHT_DP = 44
     const val HUD_ENTRANCE_MS = 120
     const val HUD_EXIT_MS = 80

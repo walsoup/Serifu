@@ -14,7 +14,9 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.WindowManager
+import android.view.animation.DecelerateInterpolator
 import android.view.animation.LinearInterpolator
+import android.view.animation.OvershootInterpolator
 import androidx.dynamicanimation.animation.FloatValueHolder
 import androidx.dynamicanimation.animation.SpringAnimation
 import androidx.dynamicanimation.animation.SpringForce
@@ -94,6 +96,36 @@ class FloatingControlPillView(context: Context) : View(context) {
     private var lastTapUpY = 0f
     private var isPotentialDoubleTap = false
 
+    private var currentScale = 1.0f
+    private var scaleAnimator: ValueAnimator? = null
+
+    private fun animateScale(target: Float, durationMs: Long, overshoot: Boolean = false) {
+        scaleAnimator?.cancel()
+        val start = currentScale
+        scaleAnimator = ValueAnimator.ofFloat(start, target).apply {
+            duration = durationMs
+            interpolator = if (overshoot) OvershootInterpolator(1.8f) else DecelerateInterpolator()
+            addUpdateListener {
+                currentScale = it.animatedValue as Float
+                invalidate()
+            }
+            start()
+        }
+    }
+
+    private fun animateStamp() {
+        scaleAnimator?.cancel()
+        scaleAnimator = ValueAnimator.ofFloat(1.0f, 0.85f, 1.06f, 1.0f).apply {
+            duration = 240L
+            interpolator = DecelerateInterpolator()
+            addUpdateListener {
+                currentScale = it.animatedValue as Float
+                invalidate()
+            }
+            start()
+        }
+    }
+
     private val singleTapRunnable = Runnable {
         lastTapUpTime = 0L
         isPotentialDoubleTap = false
@@ -155,13 +187,14 @@ class FloatingControlPillView(context: Context) : View(context) {
 
     fun render(glyph: String, phase: PillPhase, description: String, idleAlpha: Float) {
         val phaseChanged = this.phase != phase
+        val glyphChanged = this.glyph != glyph
         this.glyph = glyph
         glyphPaint.textSize = sp(if (glyph.length > 1) 11.5f else 14f)
         this.phase = phase
         this.idleAlpha = idleAlpha
         contentDescription = description
         if (phaseChanged) syncAnimations()
-        invalidate()
+        if (glyphChanged && isAttachedToWindow) animateStamp() else invalidate()
     }
 
     fun moveTo(side: PillSide, yFraction: Float) {
@@ -194,6 +227,7 @@ class FloatingControlPillView(context: Context) : View(context) {
     override fun onDetachedFromWindow() {
         breathe.cancel()
         spinner.cancel()
+        scaleAnimator?.cancel()
         spring?.cancel()
         removeCallbacks(longPressRunnable)
         removeCallbacks(singleTapRunnable)
@@ -208,6 +242,7 @@ class FloatingControlPillView(context: Context) : View(context) {
                 isPotentialDoubleTap = false
                 lastTapUpTime = 0L
                 removeCallbacks(singleTapRunnable)
+                animateScale(1.0f, 120L)
                 host?.onOutside()
                 return true
             }
@@ -217,6 +252,7 @@ class FloatingControlPillView(context: Context) : View(context) {
                 springing = false
                 dragging = false
                 longPressed = false
+                animateScale(0.92f, 80L)
                 downRawX = event.rawX
                 downRawY = event.rawY
                 downTime = event.eventTime
@@ -242,6 +278,8 @@ class FloatingControlPillView(context: Context) : View(context) {
                 val distance = hypot(event.rawX - downRawX, event.rawY - downRawY)
                 if (!dragging && distance > slop) {
                     dragging = true
+                    scaleAnimator?.cancel()
+                    currentScale = 1.0f
                     isPotentialDoubleTap = false
                     lastTapUpTime = 0L
                     removeCallbacks(singleTapRunnable)
@@ -269,6 +307,7 @@ class FloatingControlPillView(context: Context) : View(context) {
                     setLayerType(LAYER_TYPE_NONE, null)
                     springToNearestEdge()
                 } else if (!longPressed && event.actionMasked == MotionEvent.ACTION_UP) {
+                    animateScale(1.0f, 150L, overshoot = true)
                     if (isPotentialDoubleTap) {
                         isPotentialDoubleTap = false
                         lastTapUpTime = 0L
@@ -283,6 +322,7 @@ class FloatingControlPillView(context: Context) : View(context) {
                         postDelayed(singleTapRunnable, doubleTapTimeout)
                     }
                 } else {
+                    animateScale(1.0f, 150L, overshoot = true)
                     isPotentialDoubleTap = false
                     lastTapUpTime = 0L
                     removeCallbacks(singleTapRunnable)
@@ -301,10 +341,15 @@ class FloatingControlPillView(context: Context) : View(context) {
         val radius = dpF(Tuning.PILL_SIZE_DP / 2f)
         sealRect.set(cx - radius, cy - radius, cx + radius, cy + radius)
 
+        val activeScale = if (dragging) Tuning.PILL_DRAG_SCALE else currentScale
+        val hasScale = activeScale != 1f
+
         if (dragging) {
             canvas.drawCircle(cx, cy + dpF(3f), radius + dpF(2f), shadowPaint)
+        }
+        if (hasScale) {
             canvas.save()
-            canvas.scale(Tuning.PILL_DRAG_SCALE, Tuning.PILL_DRAG_SCALE, cx, cy)
+            canvas.scale(activeScale, activeScale, cx, cy)
         }
 
         sealPaint.color = if (phase == PillPhase.OFF) InkPaper.SCREENTONE else InkPaper.HANKO
@@ -319,7 +364,7 @@ class FloatingControlPillView(context: Context) : View(context) {
         val baseline = cy - (glyphPaint.ascent() + glyphPaint.descent()) / 2f
         canvas.drawText(glyph, cx, baseline, glyphPaint)
 
-        if (dragging) canvas.restore()
+        if (hasScale) canvas.restore()
     }
 
     private fun drawRing(canvas: Canvas, cx: Float, cy: Float, radius: Float) {

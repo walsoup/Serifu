@@ -60,13 +60,15 @@ class HudView(context: Context) : LinearLayout(context) {
         val gap = dp(8)
         val langScroll = android.widget.HorizontalScrollView(context).apply {
             isHorizontalScrollBarEnabled = false
+            isHorizontalFadingEdgeEnabled = true
+            setFadingEdgeLength(dp(16))
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
         }
         val langRow = LinearLayout(context).apply {
             orientation = HORIZONTAL
             layoutParams = LayoutParams(LayoutParams.WRAP_CONTENT, dp(Tuning.HUD_ROW_HEIGHT_DP))
             SourceLanguage.entries.forEach { language ->
-                val view = segment(language.nativeName, language == model.source, letterSpace = false, minWidthPx = dp(60)) {
+                val view = segment(language.nativeName, language == model.source, letterSpace = false, minWidthPx = dp(56)) {
                     host?.onSource(language)
                 }
                 addView(view)
@@ -87,7 +89,7 @@ class HudView(context: Context) : LinearLayout(context) {
         })
         addView(spacer(gap))
         addView(row(gap).apply {
-            addView(segment(if (model.paused) "Resume" else "Pause", selected = false, letterSpace = false) {
+            addView(segment(if (model.paused) "Resume" else "Pause", selected = model.paused, letterSpace = false) {
                 host?.onPauseToggle()
             })
             addView(peekSegment())
@@ -164,12 +166,20 @@ class HudView(context: Context) : LinearLayout(context) {
     ): TextView = TextView(context).apply {
         text = label
         gravity = Gravity.CENTER
-        textSize = 12f
+        textSize = if (label.length > 5 && minWidthPx == 0) 10.5f else 11.5f
         maxLines = 1
-        setPadding(dp(8), 0, dp(8), 0)
+        setPadding(dp(6), 0, dp(6), 0)
         setTextColor(if (selected) InkPaper.ON_HANKO else InkPaper.INK)
-        setBackgroundColor(if (selected) InkPaper.HANKO else InkPaper.TRANSPARENT)
-        if (letterSpace) letterSpacing = 0.04f
+        background = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = dpF(4f)
+            if (selected) {
+                setColor(InkPaper.HANKO)
+            } else {
+                setColor(android.graphics.Color.TRANSPARENT)
+                setStroke(dp(1), 0x2216140F)
+            }
+        }
+        if (letterSpace) letterSpacing = 0.02f
         setOnClickListener { onClick() }
         val width = if (minWidthPx > 0) LayoutParams.WRAP_CONTENT else 0
         val weight = if (minWidthPx > 0) 0f else 1f
@@ -183,19 +193,27 @@ class HudView(context: Context) : LinearLayout(context) {
     private fun peekSegment(): TextView = TextView(context).apply {
         text = "Peek"
         gravity = Gravity.CENTER
-        textSize = 10f
+        textSize = 11.5f
         maxLines = 1
+        setPadding(dp(6), 0, dp(6), 0)
         setTextColor(InkPaper.INK)
         contentDescription = "Peek original"
+        background = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = dpF(4f)
+            setColor(android.graphics.Color.TRANSPARENT)
+            setStroke(dp(1), 0x2216140F)
+        }
         layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 1f).apply { marginEnd = dp(4) }
-        setOnTouchListener { _, event ->
+        setOnTouchListener { v, event ->
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
+                    (v.background as? android.graphics.drawable.GradientDrawable)?.setColor(0x1816140F)
                     host?.onPeek(true)
                     poke()
                     true
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    (v.background as? android.graphics.drawable.GradientDrawable)?.setColor(android.graphics.Color.TRANSPARENT)
                     host?.onPeek(false)
                     true
                 }
