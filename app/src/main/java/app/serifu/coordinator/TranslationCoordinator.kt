@@ -421,7 +421,8 @@ class TranslationCoordinator(
                         if (estimate != null && generation == state.generation) {
                             val base = lastShownPage
                             if (base != null) {
-                                val preview = shiftPage(base, estimate.dyPx, frameW, frameH)
+                                val screenDyPx = -estimate.dyPx
+                                val preview = shiftPage(base, screenDyPx, frameW, frameH)
                                 if (preview != null) {
                                     cacheResult = "shift dy=${estimate.dyPx}"
                                     timings = timings.copy(

@@ -152,12 +152,13 @@ class SerifuAccessibilityService : AccessibilityService() {
         )
         app.readerPresence.value = after
         val className = incoming.className?.toString().orEmpty()
-        val ownOverlay = incoming.packageName?.toString() == packageName &&
+        val pkgName = incoming.packageName?.toString()
+        val isCurrentReader = after.reader && pkgName != null && pkgName == after.foregroundPackage
+        val fromReader = isCurrentReader || (pkgName != null && pkgName in readers)
+        val ownOverlay = pkgName == packageName &&
             !className.endsWith("MainActivity") &&
-            !className.endsWith("TestPageActivity")
-        val fromReader = incoming.packageName?.toString()?.let { pkg ->
-            pkg in readers || (pkg == packageName && className.endsWith("TestPageActivity"))
-        } == true
+            !className.endsWith("TestPageActivity") &&
+            !isCurrentReader
         when (incoming.eventType) {
             AccessibilityEvent.TYPE_VIEW_SCROLLED -> if (fromReader) {
                 reading.hideForGesture()

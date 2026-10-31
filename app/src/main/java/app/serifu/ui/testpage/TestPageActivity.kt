@@ -154,6 +154,16 @@ private fun ReaderPage(
     var showToolbar by remember { mutableStateOf(true) }
     val c = Serifu.colors
     val scroll = rememberScrollState()
+    LaunchedEffect(scroll.isScrollInProgress, mangaListState.isScrollInProgress) {
+        val scrolling = scroll.isScrollInProgress || mangaListState.isScrollInProgress
+        if (scrolling) {
+            val service = SerifuAccessibilityService.instance
+            service?.coordinator?.let { coord ->
+                coord.hideForGesture()
+                coord.send(Event.Scrolled)
+            }
+        }
+    }
     if (startBottom) {
         LaunchedEffect(Unit) {
             repeat(20) {

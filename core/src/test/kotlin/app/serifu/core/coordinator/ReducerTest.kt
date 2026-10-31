@@ -251,6 +251,14 @@ class ReducerTest {
     }
 
     @Test
+    fun pageReadyReplacesShowingPageForSameGeneration() {
+        val showing = CoordinatorState(phase = Phase.Showing(15), generation = 4)
+        val ready = Reducer.reduce(showing, Event.PageReady(4, pageId = 20), now = 0, auto())
+        assertEquals(Phase.Showing(20), ready.state.phase)
+        assertEquals(listOf(Effect.ShowPage(20)), ready.effects)
+    }
+
+    @Test
     fun emptyPageRetriesTwiceInsideTheWindow() {
         val processing = CoordinatorState(phase = Phase.Processing(1), generation = 4)
         val empty = Reducer.reduce(processing, Event.PageEmpty(4), now = 10_000, auto())
