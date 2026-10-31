@@ -308,7 +308,8 @@ private fun ReaderPage(
                         },
                     )
                     if (viewMode == MangaViewMode.STICK_SAMPLE) {
-                        SourceLanguage.entries.forEach { lang ->
+                        // Sample artwork only exists for JA/KO/ZH; other languages fall back to sample_ja.png.
+                        listOf(SourceLanguage.JA, SourceLanguage.KO, SourceLanguage.ZH).forEach { lang ->
                             Pill(
                                 text = lang.tag.uppercase(),
                                 selected = selectedLanguage == lang,
