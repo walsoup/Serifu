@@ -780,30 +780,6 @@ fun EngineScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
                 }
             } else null,
         )
-        Spacer(Modifier.height(10.dp))
-
-        GroupLabel(stringResource(R.string.reasoning_effort_label))
-        Spacer(Modifier.height(4.dp))
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            ReasoningEffort.entries.forEach { effort ->
-                Pill(
-                    text = effort.label,
-                    selected = settings.reasoningEffort == effort,
-                    onClick = { viewModel.update { it.copy(reasoningEffort = effort) } },
-                )
-            }
-        }
-        Spacer(Modifier.height(6.dp))
-        Text(
-            text = stringResource(R.string.reasoning_effort_desc),
-            style = Serifu.type.caption,
-            color = c.textSecondary,
-        )
 
         SectionTitle(stringResource(R.string.engine_mlkit))
         packs.forEachIndexed { index, pack ->
@@ -846,6 +822,30 @@ fun DebugScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
             checked = settings.debugOverlay,
             onCheckedChange = { checked -> viewModel.update { it.copy(debugOverlay = checked) } },
             subtitle = stringResource(R.string.debug_overlay_subtitle),
+        )
+        Spacer(Modifier.height(10.dp))
+
+        GroupLabel(stringResource(R.string.reasoning_effort_label))
+        Spacer(Modifier.height(4.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            ReasoningEffort.entries.forEach { effort ->
+                Pill(
+                    text = effort.label,
+                    selected = settings.reasoningEffort == effort,
+                    onClick = { viewModel.update { it.copy(reasoningEffort = effort) } },
+                )
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = stringResource(R.string.reasoning_effort_desc),
+            style = Serifu.type.caption,
+            color = c.textSecondary,
         )
 
         SectionTitle(stringResource(R.string.window_state))
