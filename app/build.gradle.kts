@@ -30,8 +30,8 @@ android {
         applicationId = "app.walsoup.serifu"
         minSdk = 30
         targetSdk = 36
-        versionCode = 3
-        versionName = "0.6.0-beta"
+        versionCode = 4
+        versionName = "0.6.5-beta"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
