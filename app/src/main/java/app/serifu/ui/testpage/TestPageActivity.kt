@@ -24,14 +24,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -45,6 +49,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.serifu.R
 import app.serifu.SerifuApp
 import app.serifu.core.coordinator.Event
 import app.serifu.core.model.SourceLanguage
@@ -65,18 +70,18 @@ class TestPageActivity : ComponentActivity() {
         setTurnScreenOn(true)
         enableEdgeToEdge()
         val startBottom = intent.getBooleanExtra(EXTRA_START_BOTTOM, false)
-        val initialLanguageCode = intent.getStringExtra(EXTRA_LANGUAGE)
-        val initialLang = when (initialLanguageCode) {
+        val requestedLanguage = when (intent.getStringExtra(EXTRA_LANGUAGE)) {
+            "ja" -> SourceLanguage.JA
             "ko" -> SourceLanguage.KO
             "zh" -> SourceLanguage.ZH
-            else -> SourceLanguage.JA
+            else -> null
         }
 
         setContent {
             SerifuTheme {
                 ReaderPage(
                     startBottom = startBottom,
-                    initialLang = initialLang,
+                    requestedLanguage = requestedLanguage,
                     onBack = { finish() },
                     onEnableAccessibility = { SerifuApp.openAccessibilitySettings(this) },
                 )
@@ -119,7 +124,7 @@ class TestPageActivity : ComponentActivity() {
 @Composable
 private fun ReaderPage(
     startBottom: Boolean,
-    initialLang: SourceLanguage,
+    requestedLanguage: SourceLanguage?,
     onBack: () -> Unit,
     onEnableAccessibility: () -> Unit,
 ) {
@@ -131,17 +136,13 @@ private fun ReaderPage(
     val settings = settingsState ?: Settings()
     val isServiceActive by (app?.isServiceActive ?: MutableStateFlow(true))
         .collectAsState(initial = true)
-    val selectedLanguage = settings.sourceLanguage
+    // A requested language (the pipeline test) wins. Otherwise follow the user's script,
+    // and a pill choice sticks for this page without rewriting settings on open.
+    var chosenLanguage by remember { mutableStateOf(requestedLanguage) }
+    val selectedLanguage = chosenLanguage ?: settings.sourceLanguage
     var showToolbar by remember { mutableStateOf(true) }
     val c = Serifu.colors
     val scroll = rememberScrollState()
-
-    LaunchedEffect(Unit) {
-        app?.settingsRepository?.update {
-            val base = if (it.mode == TriggerMode.OFF) it.copy(mode = TriggerMode.MANUAL) else it
-            base.copy(debugOverlay = false, sourceLanguage = initialLang)
-        }
-    }
     if (startBottom) {
         LaunchedEffect(Unit) {
             repeat(20) {
@@ -158,7 +159,8 @@ private fun ReaderPage(
     Column(
         Modifier
             .fillMaxSize()
-            .background(c.bg),
+            .background(c.bg)
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Vertical)),
     ) {
         AnimatedVisibility(
             visible = showToolbar,
@@ -169,7 +171,6 @@ private fun ReaderPage(
                 Modifier
                     .fillMaxWidth()
                     .background(c.bg)
-                    .statusBarsPadding()
                     .padding(horizontal = 14.dp, vertical = 6.dp),
             ) {
                 Row(
@@ -183,9 +184,10 @@ private fun ReaderPage(
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = c.text,
+                            painter = painterResource(R.drawable.ic_back),
+                            contentDescription = stringResource(R.string.back),
+                            tint = c.primary,
+                            modifier = Modifier.size(22.dp),
                         )
                     }
                     Spacer(Modifier.width(4.dp))
@@ -205,12 +207,28 @@ private fun ReaderPage(
                         )
                     }
                     Pill(
-                        text = if (isServiceActive) "Translate" else "Enable",
+                        text = if (isServiceActive) {
+                            stringResource(R.string.sample_translate)
+                        } else {
+                            stringResource(R.string.sample_enable)
+                        },
                         selected = true,
                         onClick = {
                             val service = SerifuAccessibilityService.instance
                             if (isServiceActive && service?.coordinator != null) {
-                                service.coordinator?.onPillTap()
+                                showToolbar = false
+                                scope.launch {
+                                    app?.settingsRepository?.update { current ->
+                                        val withLanguage = current.copy(sourceLanguage = selectedLanguage)
+                                        if (withLanguage.mode == TriggerMode.OFF) {
+                                            withLanguage.copy(mode = TriggerMode.MANUAL)
+                                        } else {
+                                            withLanguage
+                                        }
+                                    }
+                                    kotlinx.coroutines.delay(350)
+                                    service.coordinator?.onPillTap()
+                                }
                             } else {
                                 onEnableAccessibility()
                             }
@@ -218,7 +236,7 @@ private fun ReaderPage(
                     )
                     Spacer(Modifier.width(6.dp))
                     Pill(
-                        text = "Boxes",
+                        text = stringResource(R.string.sample_boxes),
                         selected = settings.debugOverlay,
                         onClick = {
                             scope.launch {
@@ -231,9 +249,9 @@ private fun ReaderPage(
                 if (!isServiceActive) {
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        text = "Accessibility is off, so this page stays in the original.",
+                        text = stringResource(R.string.sample_a11y_off),
                         style = Serifu.type.caption,
-                        color = c.primary,
+                        color = c.primaryText,
                         modifier = Modifier.padding(horizontal = 4.dp),
                     )
                 }
@@ -250,12 +268,15 @@ private fun ReaderPage(
                             text = lang.tag.uppercase(),
                             selected = selectedLanguage == lang,
                             onClick = {
-                                app?.let { sApp ->
+                                chosenLanguage = lang
+                                val service = SerifuAccessibilityService.instance
+                                if (isServiceActive && service?.coordinator != null) {
                                     scope.launch {
+                                        showToolbar = false
                                         scroll.scrollTo(0)
-                                        sApp.settingsRepository.update { it.copy(sourceLanguage = lang) }
-                                        kotlinx.coroutines.delay(200)
-                                        SerifuAccessibilityService.instance?.coordinator?.onPillTap()
+                                        app?.settingsRepository?.update { it.copy(sourceLanguage = lang) }
+                                        kotlinx.coroutines.delay(400)
+                                        service.coordinator?.onPillTap()
                                     }
                                 }
                             },
@@ -282,8 +303,11 @@ private fun ReaderPage(
     }
 }
 
-private fun chapterTitle(language: SourceLanguage): String = when (language) {
-    SourceLanguage.JA -> "Rooftop note"
-    SourceLanguage.KO -> "Sunset letter"
-    SourceLanguage.ZH -> "Clubroom secret"
-}
+@Composable
+private fun chapterTitle(language: SourceLanguage): String = stringResource(
+    when (language) {
+        SourceLanguage.JA -> R.string.sample_chapter_ja
+        SourceLanguage.KO -> R.string.sample_chapter_ko
+        SourceLanguage.ZH -> R.string.sample_chapter_zh
+    },
+)

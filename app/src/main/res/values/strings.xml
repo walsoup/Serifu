@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Serifu</string>
-    <string name="brand_kana">セリフ</string>
     <string name="a11y_service_label">Serifu</string>
     <string name="a11y_service_summary">Letters translations onto manga pages.</string>
     <string name="a11y_service_description">Serifu takes screenshots of the reader apps you choose, recognises the text on your device and draws translations on top. Nothing leaves your phone. Serifu does not read other apps\' content, and it never uses your keystrokes except to notice volume-key page turns.</string>
@@ -69,14 +68,14 @@
     <string name="font_size_max">Largest bubble text</string>
     <string name="classic_caps">Classic caps for English</string>
     <string name="caps_subtitle">Standard comic book lettering convention for English</string>
-    <string name="min_size">Smallest text %1$d sp</string>
-    <string name="max_size">Largest text %1$d sp</string>
+    <string name="min_size">%1$d sp</string>
+    <string name="max_size">%1$d sp</string>
     <string name="sfx_label">Sound effects</string>
     <string name="patrick_note">Patrick Hand reads more clearly in sentence case.</string>
 
     <string name="behaviour_title">Behaviour</string>
     <string name="settle_title">Scroll settle timer</string>
-    <string name="settle_label">Wait after you stop scrolling: %1$d ms</string>
+    <string name="settle_label">%1$d ms</string>
     <string name="settle_debounce">Debounce wait time</string>
     <string name="settle_subtitle">Delay after touch stops before capturing and lettering</string>
     <string name="rules_title">Translation rules</string>
@@ -89,7 +88,7 @@
     <string name="pill_side">Pill edge</string>
     <string name="pill_edge_left">Left edge</string>
     <string name="pill_edge_right">Right edge</string>
-    <string name="pill_alpha">Pill fades to %1$d%% when idle</string>
+    <string name="pill_alpha">%1$d%%</string>
     <string name="pill_opacity">Idle opacity</string>
     <string name="pill_opacity_subtitle">Transparency level when reading without interaction</string>
     <string name="pill_panel">Floating control pill</string>
@@ -98,6 +97,9 @@
     <string name="llm_cache_subtitle">Cache translation results to minimize processing</string>
 
     <string name="engine_title">Engine</string>
+    <string name="engine_body">Japanese, Chinese, and Korean are translated on this phone with ML Kit. The language pack downloads once, about 30 MB.</string>
+    <string name="pack_on_phone">On the phone</string>
+    <string name="pack_missing">Not downloaded</string>
     <string name="active_engine">Active engine</string>
     <string name="active_value">Active</string>
     <string name="quality_label">Quality</string>
@@ -107,6 +109,7 @@
 
     <string name="debug_title">Debug</string>
     <string name="diagnostics">Diagnostics</string>
+    <string name="timings">Timings</string>
     <string name="window_state">Window state</string>
     <string name="dynamic_color_subtitle">Follow the wallpaper accent on buttons</string>
     <string name="pill_content_description">Serifu, %1$s, %2$s. Tap to translate now, long press for options.</string>
@@ -115,6 +118,8 @@
     <string name="tooltip_capture_failed">Serifu couldn\'t capture this screen. Scroll the page and it will try again.</string>
     <string name="tooltip_model">Download the %1$s pack in Serifu.</string>
     <string name="open_test_page">Read a sample page</string>
+    <string name="a11y_off">Accessibility is off</string>
+    <string name="a11y_off_body">Turn it on to letter the page.</string>
     <string name="notification_channel">Serifu</string>
     <string name="debug_overlay">Draw the debug overlay</string>
     <string name="debug_overlay_subtitle">Bounding boxes, clusters, ink walls and masks on reader screens</string>
@@ -194,4 +199,55 @@
     <string name="onboarding_note_restricted_sub">Android 13+ requirement for sideloaded accessibility apps</string>
     <string name="onboarding_note_service_sub">Captures reader screens and draws lettering overlay</string>
     <string name="onboarding_note_readers_sub">Works seamlessly over Mihon, Kotatsu, browsers</string>
+    <string name="cancel">Cancel</string>
+    <string name="languages_label">Languages</string>
+    <string name="behaviour_label">Behaviour</string>
+    <string name="lettering_label">Lettering</string>
+    <string name="direction_format">%1$s \u2192 %2$s</string>
+    <string name="trigger_auto">Auto</string>
+    <string name="trigger_manual">Manual</string>
+    <string name="trigger_off">Off</string>
+    <string name="trigger_auto_hint">Letters each page once you stop scrolling.</string>
+    <string name="trigger_manual_hint">Letters a page only when you tap the pill.</string>
+    <string name="trigger_off_hint">Serifu stays idle and draws nothing.</string>
+    <string name="a11y_off_cta">Open accessibility settings</string>
+    <string name="change_languages">Change languages</string>
+    <string name="packs_title">Offline packs</string>
+    <string name="packs_body">Translation runs on this phone. Each pack is about 30 MB and downloads once.</string>
+    <string name="packs_download_missing">Download all other packs (%1$d, ~%2$d MB)</string>
+    <string name="packs_download_needed">Download needed packs (%1$d, ~%2$d MB)</string>
+    <string name="packs_needed_ready">Everything for %1$s \u2192 %2$s is on this phone.</string>
+    <string name="packs_all_ready">All packs are on this phone.</string>
+    <string name="pack_needed">Needed for %1$s \u2192 %2$s</string>
+    <string name="pack_downloading">Downloading\u2026</string>
+    <string name="pack_ready">On this phone \u00B7 %1$d MB</string>
+    <string name="pack_not_downloaded">Not downloaded \u00B7 %1$d MB</string>
+    <string name="download">Download</string>
+    <string name="delete">Delete</string>
+    <string name="delete_pack_title">Delete %1$s pack?</string>
+    <string name="delete_pack_body">Translations that use %1$s will stop until you download it again.</string>
+    <string name="source_packs">Source scripts</string>
+    <string name="target_packs">Target languages</string>
+    <string name="no_apps_match">No installed app matches that search.</string>
+    <string name="step_of">STEP %1$d OF %2$d</string>
+    <string name="close">Close</string>
+    <string name="more_languages">More languages (%1$d)</string>
+    <string name="fewer_languages">Show fewer</string>
+    <string name="lettering_summary">%1$d\u2013%2$d sp \u00B7 SFX %3$s</string>
+    <string name="timing_total">Total: %1$d ms · Cache: %2$s</string>
+    <string name="timing_cache_miss">miss</string>
+    <string name="timing_capture">Capture: %1$d ms · Convert: %2$d ms</string>
+    <string name="timing_fingerprint">Fingerprint: %1$d ms · OCR: %2$d ms</string>
+    <string name="timing_layout">Cluster: %1$d ms · Layout: %2$d ms</string>
+    <string name="timing_mlkit">ML Kit: %1$d ms</string>
+    <string name="timing_self">Self-detection discarded: %1$d</string>
+    <string name="sample_translate">Translate</string>
+    <string name="sample_enable">Enable</string>
+    <string name="sample_boxes">Boxes</string>
+    <string name="sample_a11y_off">Accessibility is off, so this page stays in the original.</string>
+    <string name="sample_page_description">%1$s sample page</string>
+    <string name="sample_missing">This sample page is missing.</string>
+    <string name="sample_chapter_ja">水やり</string>
+    <string name="sample_chapter_ko">물주기</string>
+    <string name="sample_chapter_zh">浇水</string>
 </resources>

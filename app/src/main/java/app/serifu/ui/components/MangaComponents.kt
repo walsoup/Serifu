@@ -29,6 +29,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.serifu.ui.design.LightPalette
 import app.serifu.ui.design.Serifu
 
 /**
@@ -39,6 +40,7 @@ fun MangaPanel(
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
     contentDescription: String? = null,
+    containerColor: Color = Serifu.colors.surface,
     borderColor: Color = Serifu.colors.text.copy(alpha = 0.85f),
     content: @Composable ColumnScope.() -> Unit,
 ) {
@@ -47,7 +49,7 @@ fun MangaPanel(
         modifier = modifier
             .fillMaxWidth()
             .clip(shape)
-            .background(Serifu.colors.surface)
+            .background(containerColor)
             .border(1.5.dp, borderColor, shape)
             .then(
                 if (onClick != null) {
@@ -75,7 +77,9 @@ fun SpeechBubblePreview(
     modifier: Modifier = Modifier,
     fontLabel: String? = null,
 ) {
-    val c = Serifu.colors
+    // A page bubble is paper and ink whatever the app theme is doing.
+    val paper = LightPalette.surface
+    val ink = LightPalette.text
     Column(
         modifier = modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -93,25 +97,33 @@ fun SpeechBubblePreview(
                 val left = (size.width - bubbleWidth) / 2f
                 val top = 8.dp.toPx()
 
-                val path = Path().apply {
+                val bubble = Path().apply {
                     addOval(Rect(left, top, left + bubbleWidth, top + bubbleHeight))
-                    // Speech bubble tail
-                    moveTo(left + bubbleWidth * 0.38f, top + bubbleHeight - 2.dp.toPx())
-                    lineTo(left + bubbleWidth * 0.28f, top + bubbleHeight + 16.dp.toPx())
-                    lineTo(left + bubbleWidth * 0.46f, top + bubbleHeight - 2.dp.toPx())
+                }
+                val tailTop = top + bubbleHeight - 8.dp.toPx()
+                val tail = Path().apply {
+                    moveTo(left + bubbleWidth * 0.34f, tailTop)
+                    lineTo(left + bubbleWidth * 0.26f, top + bubbleHeight + 14.dp.toPx())
+                    lineTo(left + bubbleWidth * 0.48f, tailTop)
+                    close()
+                }
+                val tailEdge = Path().apply {
+                    moveTo(left + bubbleWidth * 0.34f, tailTop)
+                    lineTo(left + bubbleWidth * 0.26f, top + bubbleHeight + 14.dp.toPx())
+                    lineTo(left + bubbleWidth * 0.48f, tailTop)
                 }
 
-                // Fill bubble with pristine surface
-                drawPath(path, c.surface)
-                // Outline bubble with ink
-                drawPath(path, c.text, style = Stroke(width = strokeWidth))
+                drawPath(bubble, paper)
+                drawPath(bubble, ink, style = Stroke(width = strokeWidth))
+                drawPath(tail, paper)
+                drawPath(tailEdge, ink, style = Stroke(width = strokeWidth))
             }
 
             Text(
                 text = text,
                 fontFamily = fontFamily,
                 fontSize = 18.sp,
-                color = c.text,
+                color = ink,
                 textAlign = TextAlign.Center,
                 modifier = Modifier
                     .fillMaxWidth(0.72f)
@@ -124,7 +136,7 @@ fun SpeechBubblePreview(
             Text(
                 text = fontLabel,
                 style = Serifu.type.monoTiny,
-                color = c.textSecondary,
+                color = LightPalette.textSecondary,
             )
         }
     }

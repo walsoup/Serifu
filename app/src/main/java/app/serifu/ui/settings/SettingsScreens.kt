@@ -1,7 +1,6 @@
 package app.serifu.ui.settings
 
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.os.Build
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -19,11 +18,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -31,19 +30,13 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
-import com.walsoup.linen.ActionButton
-import com.walsoup.linen.ActionStyle
-import com.walsoup.linen.LinenDimens
 import app.serifu.ui.testpage.TestPageActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -62,14 +55,12 @@ import android.view.HapticFeedbackConstants
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.serifu.R
 import app.serifu.SerifuApp
 import app.serifu.core.Tuning
 import app.serifu.core.model.LetteringFont
 import app.serifu.core.model.PillSide
-import app.serifu.core.model.QualityMode
 import app.serifu.core.model.SfxMode
 import app.serifu.core.model.SourceLanguage
 import app.serifu.core.model.TargetLanguage
@@ -85,7 +76,16 @@ import app.serifu.ui.components.SealBadge
 import app.serifu.ui.components.SpeechBubblePreview
 import app.serifu.ui.components.rememberLaunchableApps
 import app.serifu.ui.home.HomeViewModel
-import app.serifu.ui.theme.DelaGothicOne
+import app.serifu.ui.design.ActionButton
+import app.serifu.ui.design.ActionStyle
+import app.serifu.ui.design.BrandLockup
+import app.serifu.ui.design.SerifuConfirmDialog
+import app.serifu.ui.design.SerifuSlider
+import app.serifu.ui.design.fullName
+import app.serifu.ui.design.label
+import app.serifu.ui.design.shortName
+import app.serifu.ui.design.targetName
+import app.serifu.ui.design.LightPalette
 import app.serifu.ui.design.GroupLabel
 import app.serifu.ui.design.Hairline
 import app.serifu.ui.design.Pill
@@ -94,10 +94,10 @@ import app.serifu.ui.design.Serifu
 import app.serifu.ui.design.SerifuScreen
 import app.serifu.ui.design.SerifuSwitch
 import app.serifu.ui.design.SerifuTextField
-import app.serifu.ui.design.SettingsCard
 import app.serifu.ui.design.SettingLine
 import app.serifu.ui.design.SwitchLine
 import app.serifu.ui.design.TopBar
+import app.serifu.ui.versionName
 
 @Composable
 fun LanguagesScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
@@ -105,17 +105,37 @@ fun LanguagesScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
     val c = Serifu.colors
     val downloadedCodes by LanguageModelManager.downloadedCodes.collectAsStateWithLifecycle()
     val inProgressCodes by LanguageModelManager.inProgressCodes.collectAsStateWithLifecycle()
-    var selectedPacks by remember { mutableStateOf(setOf<String>()) }
+    var pendingDelete by remember { mutableStateOf<LanguagePack?>(null) }
+    var showAllTargets by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         LanguageModelManager.refreshDownloaded()
     }
 
+    val needed = remember(settings.sourceLanguage, settings.targetLanguage) {
+        setOf(settings.sourceLanguage.tag, settings.targetLanguage)
+    }
+    val missing = LanguageModelManager.ALL_PACKS.filter { it.code !in downloadedCodes && it.code !in inProgressCodes }
+    val missingNeeded = missing.filter { it.code in needed }
+
+    pendingDelete?.let { pack ->
+        SerifuConfirmDialog(
+            title = stringResource(R.string.delete_pack_title, pack.name),
+            text = stringResource(R.string.delete_pack_body, pack.name),
+            confirmLabel = stringResource(R.string.delete),
+            onConfirm = {
+                coroutineScope.launch { LanguageModelManager.deletePack(pack.code) }
+                pendingDelete = null
+            },
+            onDismiss = { pendingDelete = null },
+        )
+    }
+
     Column(
         Modifier
             .fillMaxSize()
-            .background(Serifu.colors.bg)
+            .background(c.bg)
             .systemBarsPadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = Serifu.margin),
@@ -129,7 +149,6 @@ fun LanguagesScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
         )
 
         SectionTitle(stringResource(R.string.source_label))
-        Spacer(Modifier.height(8.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -151,8 +170,16 @@ fun LanguagesScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
             color = c.textSecondary,
             modifier = Modifier.padding(bottom = 6.dp),
         )
-
-        TargetLanguage.all.forEach { language ->
+        Hairline()
+        // The ten languages with offline packs come first; the long tail stays one tap away.
+        val popular = remember { LanguageModelManager.POPULAR_TARGET_PACKS.map { TargetLanguage.fromTag(it.code) } }
+        val selectedExtra = TargetLanguage.fromTag(settings.targetLanguage).takeIf { it !in popular }
+        val shownTargets = when {
+            showAllTargets -> TargetLanguage.all
+            selectedExtra != null -> listOf(selectedExtra) + popular
+            else -> popular
+        }
+        shownTargets.forEach { language ->
             val selected = settings.targetLanguage == language.tag
             SettingLine(
                 label = language.englishName,
@@ -162,139 +189,71 @@ fun LanguagesScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
                 onClick = { viewModel.update { it.copy(targetLanguage = language.tag) } },
             )
         }
-
-        SectionTitle("Offline Language Packs")
-        Text(
-            text = "Select multiple language packs to download together for instant offline translation. Each ML Kit pack is ~30 MB.",
-            style = Serifu.type.bodySecondary,
-            color = c.textSecondary,
-            modifier = Modifier.padding(bottom = 8.dp),
+        SettingLine(
+            label = if (showAllTargets) stringResource(R.string.fewer_languages) else stringResource(R.string.more_languages, TargetLanguage.all.size),
+            showChevron = false,
+            emphasis = true,
+            onClick = { showAllTargets = !showAllTargets },
         )
 
-        // Quick multi-selection filters
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            val allCodes = remember { LanguageModelManager.ALL_PACKS.map { it.code }.toSet() }
-            val uninstalledCodes = remember(downloadedCodes) { allCodes - downloadedCodes }
-            Pill(
-                text = "Select uninstalled (${uninstalledCodes.size})",
-                selected = selectedPacks.isNotEmpty() && selectedPacks == uninstalledCodes,
+        SectionTitle(stringResource(R.string.packs_title))
+        Text(
+            text = stringResource(R.string.packs_body),
+            style = Serifu.type.bodySecondary,
+            color = c.textSecondary,
+        )
+        Spacer(Modifier.height(14.dp))
+        // Needed packs are what stops translation working, so they get the primary action.
+        // Everything else is optional and stays quiet.
+        if (missingNeeded.isNotEmpty()) {
+            ActionButton(
+                text = stringResource(R.string.packs_download_needed, missingNeeded.size, missingNeeded.sumOf { it.sizeMb }),
                 onClick = {
-                    selectedPacks = if (selectedPacks == uninstalledCodes) emptySet() else uninstalledCodes
+                    coroutineScope.launch {
+                        LanguageModelManager.downloadPacks(missingNeeded.map { it.code }.toSet(), settings.wifiOnlyDownloads)
+                    }
                 },
             )
-            if (selectedPacks.isNotEmpty()) {
-                Pill(
-                    text = "Clear (${selectedPacks.size})",
-                    selected = false,
-                    onClick = { selectedPacks = emptySet() },
-                )
-            }
-        }
-
-        // Batch Action Panel
-        AnimatedVisibility(
-            visible = selectedPacks.isNotEmpty(),
-            enter = fadeIn(tween(150)) + expandVertically(),
-            exit = fadeOut(tween(100)) + shrinkVertically(),
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 12.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(c.surface)
-                    .border(1.5.dp, c.primary, RoundedCornerShape(14.dp))
-                    .padding(14.dp),
-            ) {
-                Text(
-                    text = "${selectedPacks.size} packs selected (~${selectedPacks.size * 30} MB)",
-                    style = Serifu.type.body.copy(fontWeight = FontWeight.Bold),
-                    color = c.text,
-                )
+        } else {
+            Text(
+                stringResource(R.string.packs_needed_ready, settings.sourceLanguage.englishName, targetName(settings.targetLanguage)),
+                style = Serifu.type.caption,
+                color = c.primaryText,
+            )
+            if (missing.isNotEmpty()) {
                 Spacer(Modifier.height(10.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val notDownloadedInSelection = selectedPacks.filter { it !in downloadedCodes }.toSet()
-                    if (notDownloadedInSelection.isNotEmpty()) {
-                        ActionButton(
-                            text = "Download Selected (${notDownloadedInSelection.size})",
-                            onClick = {
-                                coroutineScope.launch {
-                                    LanguageModelManager.downloadPacks(notDownloadedInSelection, settings.wifiOnlyDownloads)
-                                    selectedPacks = emptySet()
-                                }
-                            },
-                            style = ActionStyle.Primary,
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                    val downloadedInSelection = selectedPacks.filter { it in downloadedCodes }.toSet()
-                    if (downloadedInSelection.isNotEmpty()) {
-                        ActionButton(
-                            text = "Delete Selected (${downloadedInSelection.size})",
-                            onClick = {
-                                coroutineScope.launch {
-                                    LanguageModelManager.deletePacks(downloadedInSelection)
-                                    selectedPacks = emptySet()
-                                }
-                            },
-                            style = ActionStyle.Ghost,
-                        )
-                    }
-                }
+                ActionButton(
+                    text = stringResource(R.string.packs_download_missing, missing.size, missing.sumOf { it.sizeMb }),
+                    onClick = {
+                        coroutineScope.launch {
+                            LanguageModelManager.downloadPacks(missing.map { it.code }.toSet(), settings.wifiOnlyDownloads)
+                        }
+                    },
+                    style = ActionStyle.Ghost,
+                )
             }
         }
 
-        Text("SOURCE SCRIPTS", style = Serifu.type.overline, color = c.textSecondary, modifier = Modifier.padding(vertical = 4.dp))
+        GroupHeader(stringResource(R.string.source_packs))
+        Hairline()
         LanguageModelManager.SOURCE_PACKS.forEach { pack ->
-            LanguagePackRow(
-                pack = pack,
-                isSelected = pack.code in selectedPacks,
-                isDownloaded = pack.code in downloadedCodes,
-                isInProgress = pack.code in inProgressCodes,
-                onToggleSelect = {
-                    selectedPacks = if (pack.code in selectedPacks) selectedPacks - pack.code else selectedPacks + pack.code
-                },
-                onDownload = {
-                    coroutineScope.launch {
-                        LanguageModelManager.downloadPacks(setOf(pack.code), settings.wifiOnlyDownloads)
-                    }
-                },
-                onDelete = {
-                    coroutineScope.launch {
-                        LanguageModelManager.deletePack(pack.code)
-                    }
-                },
-            )
+            LanguagePackRow(pack, settings.sourceLanguage.englishName, targetName(settings.targetLanguage), pack.code in needed,
+                pack.code in downloadedCodes, pack.code in inProgressCodes,
+                onDownload = { coroutineScope.launch { LanguageModelManager.downloadPacks(setOf(pack.code), settings.wifiOnlyDownloads) } },
+                onDelete = { pendingDelete = pack })
         }
 
-        Spacer(Modifier.height(8.dp))
-        Text("TARGET LANGUAGES", style = Serifu.type.overline, color = c.textSecondary, modifier = Modifier.padding(vertical = 4.dp))
+        GroupHeader(stringResource(R.string.target_packs))
+        Hairline()
         LanguageModelManager.POPULAR_TARGET_PACKS.forEach { pack ->
-            LanguagePackRow(
-                pack = pack,
-                isSelected = pack.code in selectedPacks,
-                isDownloaded = pack.code in downloadedCodes,
-                isInProgress = pack.code in inProgressCodes,
-                onToggleSelect = {
-                    selectedPacks = if (pack.code in selectedPacks) selectedPacks - pack.code else selectedPacks + pack.code
-                },
-                onDownload = {
-                    coroutineScope.launch {
-                        LanguageModelManager.downloadPacks(setOf(pack.code), settings.wifiOnlyDownloads)
-                    }
-                },
-                onDelete = {
-                    coroutineScope.launch {
-                        LanguageModelManager.deletePack(pack.code)
-                    }
-                },
-            )
+            LanguagePackRow(pack, settings.sourceLanguage.englishName, targetName(settings.targetLanguage), pack.code in needed,
+                pack.code in downloadedCodes, pack.code in inProgressCodes,
+                onDownload = { coroutineScope.launch { LanguageModelManager.downloadPacks(setOf(pack.code), settings.wifiOnlyDownloads) } },
+                onDelete = { pendingDelete = pack })
         }
 
         SectionTitle(stringResource(R.string.network_label))
+        Hairline()
         SwitchLine(
             label = stringResource(R.string.wifi_only),
             checked = settings.wifiOnlyDownloads,
@@ -307,83 +266,50 @@ fun LanguagesScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
 }
 
 @Composable
+private fun GroupHeader(text: String) {
+    Spacer(Modifier.height(20.dp))
+    Text(text, style = Serifu.type.caption.copy(fontWeight = FontWeight.SemiBold), color = Serifu.colors.textSecondary)
+    Spacer(Modifier.height(6.dp))
+}
+
+@Composable
 private fun LanguagePackRow(
     pack: LanguagePack,
-    isSelected: Boolean,
+    sourceName: String,
+    targetName: String,
+    isNeeded: Boolean,
     isDownloaded: Boolean,
     isInProgress: Boolean,
-    onToggleSelect: () -> Unit,
     onDownload: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    val view = LocalView.current
     val c = Serifu.colors
-
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 52.dp)
-            .clickable {
-                if (Build.VERSION.SDK_INT >= 34) {
-                    view.performHapticFeedback(HapticFeedbackConstants.SEGMENT_TICK)
-                } else {
-                    view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-                }
-                onToggleSelect()
-            }
-            .padding(vertical = 6.dp),
+            .heightIn(min = 60.dp)
+            .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Checkbox(
-            checked = isSelected,
-            onCheckedChange = {
-                if (Build.VERSION.SDK_INT >= 34) {
-                    view.performHapticFeedback(HapticFeedbackConstants.SEGMENT_TICK)
-                } else {
-                    view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-                }
-                onToggleSelect()
-            },
-            colors = CheckboxDefaults.colors(
-                checkedColor = c.primary,
-                checkmarkColor = c.onPrimary,
-                uncheckedColor = c.inactive,
-            ),
-        )
-        Spacer(Modifier.width(8.dp))
         Column(Modifier.weight(1f)) {
-            Text("${pack.name} · ${pack.nativeName}", style = Serifu.type.body, color = c.text)
-            val statusText = when {
-                isInProgress -> "Downloading…"
-                isDownloaded -> "Downloaded (${pack.sizeMb} MB) · Ready offline"
-                else -> "Not downloaded (${pack.sizeMb} MB)"
-            }
-            val statusColor = when {
-                isInProgress -> c.primary
-                isDownloaded -> c.primary
-                else -> c.textSecondary
+            Text(if (pack.nativeName == pack.name) pack.name else "${pack.name} \u00B7 ${pack.nativeName}", style = Serifu.type.body, color = c.text)
+            val (statusText, statusColor) = when {
+                isInProgress -> stringResource(R.string.pack_downloading) to c.primaryText
+                isDownloaded -> stringResource(R.string.pack_ready, pack.sizeMb) to c.textSecondary
+                isNeeded -> stringResource(R.string.pack_needed, sourceName, targetName) to c.primaryText
+                else -> stringResource(R.string.pack_not_downloaded, pack.sizeMb) to c.textSecondary
             }
             Text(statusText, style = Serifu.type.caption, color = statusColor)
         }
-        Spacer(Modifier.width(8.dp))
-        if (isInProgress) {
-            CircularProgressIndicator(
+        Spacer(Modifier.width(12.dp))
+        when {
+            isInProgress -> CircularProgressIndicator(
                 modifier = Modifier.size(20.dp),
                 strokeWidth = 2.dp,
                 color = c.primary,
             )
-        } else if (isDownloaded) {
-            Pill(
-                text = "Delete",
-                selected = false,
-                onClick = onDelete,
-            )
-        } else {
-            Pill(
-                text = "Download",
-                selected = false,
-                onClick = onDownload,
-            )
+            isDownloaded -> Pill(text = stringResource(R.string.delete), selected = false, onClick = onDelete)
+            else -> Pill(text = stringResource(R.string.download), selected = isNeeded, onClick = onDownload)
         }
     }
     Hairline()
@@ -422,6 +348,9 @@ fun ReadersScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
         )
 
         SectionTitle(stringResource(R.string.installed_apps))
+        if (shown.isEmpty()) {
+            Text(stringResource(R.string.no_apps_match), style = Serifu.type.caption, color = c.textSecondary)
+        }
         shown.forEach { app ->
             val selected = app.packageName in settings.readerPackages
             Row(
@@ -451,7 +380,7 @@ fun ReadersScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
                     Text(app.label, style = Serifu.type.body, color = c.text)
                     Text(app.packageName, style = Serifu.type.monoTiny, color = c.textSecondary)
                 }
-                SerifuSwitch(checked = selected, enabled = false)
+                SerifuSwitch(checked = selected)
             }
             Hairline()
         }
@@ -460,7 +389,8 @@ fun ReadersScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
 }
 
 @Composable
-fun LetteringScreen(viewModel: HomeViewModel, onBack: () -> Unit) {    val settings by viewModel.settings.collectAsStateWithLifecycle()
+fun LetteringScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
+    val settings by viewModel.settings.collectAsStateWithLifecycle()
     val c = Serifu.colors
     val sampleFont = SerifuFonts.lettering(settings.letteringFont)
 
@@ -476,12 +406,10 @@ fun LetteringScreen(viewModel: HomeViewModel, onBack: () -> Unit) {    val setti
         Spacer(Modifier.height(8.dp))
 
         // Manga Speech Bubble Preview
-        val fontName = when (settings.letteringFont) {
-            LetteringFont.COMIC_NEUE -> "Comic Neue Bold"
-            LetteringFont.ATKINSON -> "Atkinson Hyperlegible"
-            LetteringFont.PATRICK_HAND -> "Patrick Hand"
-        }
-        MangaPanel {
+        MangaPanel(
+            containerColor = LightPalette.bg,
+            borderColor = LightPalette.text.copy(alpha = 0.85f),
+        ) {
             SpeechBubblePreview(
                 text = if (settings.classicCaps && settings.targetLanguage == "en") {
                     stringResource(R.string.lettering_sample).uppercase()
@@ -489,21 +417,19 @@ fun LetteringScreen(viewModel: HomeViewModel, onBack: () -> Unit) {    val setti
                     stringResource(R.string.lettering_sample)
                 },
                 fontFamily = sampleFont,
-                fontLabel = "$fontName · ${settings.minFontSp}-${settings.maxFontSp} sp",
+                fontLabel = "${settings.letteringFont.fullName} · ${settings.minFontSp}-${settings.maxFontSp} sp",
             )
         }
 
         SectionTitle(stringResource(R.string.font_label))
         Spacer(Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(
+            Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
             LetteringFont.entries.forEach { font ->
-                val name = when (font) {
-                    LetteringFont.COMIC_NEUE -> "Comic Neue"
-                    LetteringFont.ATKINSON -> "Atkinson"
-                    LetteringFont.PATRICK_HAND -> "Patrick Hand"
-                }
                 Pill(
-                    text = name,
+                    text = font.shortName,
                     selected = settings.letteringFont == font,
                     onClick = { viewModel.update { it.copy(letteringFont = font) } },
                 )
@@ -549,7 +475,7 @@ fun LetteringScreen(viewModel: HomeViewModel, onBack: () -> Unit) {    val setti
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             SfxMode.entries.forEach { mode ->
                 Pill(
-                    text = mode.name.lowercase().replaceFirstChar { it.uppercase() },
+                    text = mode.label,
                     selected = settings.sfxMode == mode,
                     onClick = { viewModel.update { it.copy(sfxMode = mode) } },
                 )
@@ -640,117 +566,11 @@ fun BehaviourScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
 }
 
 @Composable
-fun SelectableEngineCard(
-    title: String,
-    subtitle: String,
-    description: String,
-    selected: Boolean,
-    badge: String? = null,
-    onClick: () -> Unit,
-    footer: (@Composable () -> Unit)? = null,
-) {
-    val view = LocalView.current
+fun EngineScreen(onBack: () -> Unit) {
     val c = Serifu.colors
-
-    val borderColor by animateColorAsState(
-        targetValue = if (selected) c.primary else c.hairline,
-        animationSpec = tween(durationMillis = 200),
-        label = "engine_card_border",
-    )
-    val bgColor by animateColorAsState(
-        targetValue = if (selected) c.surfaceAlt else c.surface,
-        animationSpec = tween(durationMillis = 200),
-        label = "engine_card_bg",
-    )
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(bgColor)
-            .border(if (selected) 2.dp else 1.dp, borderColor, RoundedCornerShape(16.dp))
-            .clickable {
-                if (Build.VERSION.SDK_INT >= 34) {
-                    view.performHapticFeedback(HapticFeedbackConstants.SEGMENT_TICK)
-                } else {
-                    view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-                }
-                onClick()
-            }
-            .padding(18.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(title, style = Serifu.type.title, color = c.text)
-                if (badge != null) {
-                    Spacer(Modifier.width(8.dp))
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(100))
-                            .background(c.container)
-                            .padding(horizontal = 8.dp, vertical = 2.dp),
-                    ) {
-                        Text(badge, style = Serifu.type.monoTiny, color = c.primary)
-                    }
-                }
-            }
-            if (selected) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(100))
-                        .background(c.primary)
-                        .padding(horizontal = 10.dp, vertical = 4.dp),
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.Check,
-                            contentDescription = null,
-                            tint = c.onPrimary,
-                            modifier = Modifier.size(13.dp),
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Text(
-                            "ACTIVE",
-                            style = Serifu.type.monoTiny.copy(fontWeight = FontWeight.Bold),
-                            color = c.onPrimary,
-                        )
-                    }
-                }
-            } else {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(100))
-                        .border(1.dp, c.inactive, RoundedCornerShape(100))
-                        .padding(horizontal = 10.dp, vertical = 4.dp),
-                ) {
-                    Text(
-                        "TAP TO SELECT",
-                        style = Serifu.type.monoTiny,
-                        color = c.textSecondary,
-                    )
-                }
-            }
-        }
-        Spacer(Modifier.height(4.dp))
-        Text(subtitle, style = Serifu.type.monoSmall, color = if (selected) c.primary else c.textSecondary)
-        Spacer(Modifier.height(8.dp))
-        Text(description, style = Serifu.type.bodySecondary, color = c.textSecondary)
-
-        if (footer != null) {
-            Spacer(Modifier.height(12.dp))
-            footer()
-        }
-    }
-}
-
-@Composable
-fun EngineScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
-    val settings by viewModel.settings.collectAsStateWithLifecycle()
-    val c = Serifu.colors
+    val downloaded by LanguageModelManager.downloadedCodes.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { LanguageModelManager.refreshDownloaded() }
+    val packs = LanguageModelManager.SOURCE_PACKS + LanguageModelManager.POPULAR_TARGET_PACKS.take(1)
 
     Column(
         Modifier
@@ -761,27 +581,27 @@ fun EngineScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
             .padding(horizontal = Serifu.margin),
     ) {
         TopBar(onBack = onBack, title = stringResource(R.string.engine_title))
-
-        SectionTitle("Active Translation Engine")
+        Spacer(Modifier.height(8.dp))
         Text(
-            text = "Select your active engine. Tap any engine to switch immediately.",
+            text = stringResource(R.string.engine_body),
             style = Serifu.type.bodySecondary,
             color = c.textSecondary,
-            modifier = Modifier.padding(bottom = 12.dp),
         )
-
-        // Card 1: On-Device ML Kit
-        SelectableEngineCard(
-            title = stringResource(R.string.engine_mlkit),
-            subtitle = "Instant · ~300ms · Lightweight neural models",
-            description = "Fast offline neural translation using Google ML Kit. Translates dialogue and captions with zero wait and minimal battery drain.",
-            selected = settings.quality == QualityMode.FAST,
-            onClick = { viewModel.update { it.copy(quality = QualityMode.FAST) } },
-        )
-
+        SectionTitle(stringResource(R.string.engine_mlkit))
+        packs.forEachIndexed { index, pack ->
+            SettingLine(
+                label = pack.name,
+                value = stringResource(
+                    if (pack.code in downloaded) R.string.pack_on_phone else R.string.pack_missing,
+                ),
+                showChevron = false,
+                showHairline = index < packs.lastIndex,
+            )
+        }
         Spacer(Modifier.height(24.dp))
     }
 }
+
 
 @Composable
 fun DebugScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
@@ -809,12 +629,6 @@ fun DebugScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
             onCheckedChange = { checked -> viewModel.update { it.copy(debugOverlay = checked) } },
             subtitle = stringResource(R.string.debug_overlay_subtitle),
         )
-        SwitchLine(
-            label = stringResource(R.string.dynamic_color),
-            checked = settings.dynamicColor,
-            onCheckedChange = { checked -> viewModel.update { it.copy(dynamicColor = checked) } },
-            subtitle = stringResource(R.string.dynamic_color_subtitle),
-        )
 
         SectionTitle(stringResource(R.string.window_state))
         Text(
@@ -829,7 +643,7 @@ fun DebugScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
         Text(
             text = currentForeground,
             style = Serifu.type.monoSmall,
-            color = c.primary,
+            color = c.primaryText,
             modifier = Modifier.padding(vertical = 4.dp),
         )
         Spacer(Modifier.height(8.dp))
@@ -845,48 +659,52 @@ fun DebugScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
             modifier = Modifier.padding(vertical = 4.dp),
         )
 
-        SectionTitle(stringResource(R.string.diagnostics))
+        SectionTitle(stringResource(R.string.timings))
         Text(
-            text = "Total: ${timings.totalMs} ms · Cache: ${timings.cacheResult.ifEmpty { "miss" }}",
+            text = stringResource(
+                R.string.timing_total,
+                timings.totalMs,
+                timings.cacheResult.ifEmpty { stringResource(R.string.timing_cache_miss) },
+            ),
             style = Serifu.type.monoSmall,
             color = c.text,
             modifier = Modifier.padding(vertical = 2.dp),
         )
         Text(
-            text = "Capture: ${timings.captureMs} ms · Convert: ${timings.convertMs} ms",
+            text = stringResource(R.string.timing_capture, timings.captureMs, timings.convertMs),
             style = Serifu.type.monoSmall,
             color = c.textSecondary,
             modifier = Modifier.padding(vertical = 2.dp),
         )
         Text(
-            text = "Fingerprint: ${timings.fingerprintMs} ms · OCR: ${timings.ocrMs} ms",
+            text = stringResource(R.string.timing_fingerprint, timings.fingerprintMs, timings.ocrMs),
             style = Serifu.type.monoSmall,
             color = c.textSecondary,
             modifier = Modifier.padding(vertical = 2.dp),
         )
         Text(
-            text = "Cluster: ${timings.clusterMs} ms · Layout: ${timings.layoutMs} ms",
+            text = stringResource(R.string.timing_layout, timings.clusterMs, timings.layoutMs),
             style = Serifu.type.monoSmall,
             color = c.textSecondary,
             modifier = Modifier.padding(vertical = 2.dp),
         )
         Text(
-            text = "ML Kit: ${timings.translateMlKitMs} ms",
+            text = stringResource(R.string.timing_mlkit, timings.translateMlKitMs),
             style = Serifu.type.monoSmall,
             color = c.textSecondary,
             modifier = Modifier.padding(vertical = 2.dp),
         )
         if (timings.selfDiscarded > 0) {
             Text(
-                text = "Self-detection discarded: ${timings.selfDiscarded}",
+                text = stringResource(R.string.timing_self, timings.selfDiscarded),
                 style = Serifu.type.monoSmall,
-                color = c.primary,
+                color = c.primaryText,
                 modifier = Modifier.padding(vertical = 2.dp),
             )
         }
         Spacer(Modifier.height(16.dp))
         ActionButton(
-            text = "Open Sample Test Reader",
+            text = stringResource(R.string.open_test_page),
             onClick = {
                 context.startActivity(Intent(context, TestPageActivity::class.java))
             },
@@ -902,15 +720,7 @@ fun AboutScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val c = Serifu.colors
     var activeLicense by remember { mutableStateOf<String?>(null) }
-    val version = remember {
-        val info = if (Build.VERSION.SDK_INT >= 33) {
-            context.packageManager.getPackageInfo(context.packageName, PackageManager.PackageInfoFlags.of(0))
-        } else {
-            @Suppress("DEPRECATION")
-            context.packageManager.getPackageInfo(context.packageName, 0)
-        }
-        info.versionName ?: ""
-    }
+    val version = remember(context.packageName) { context.versionName() }
     val licenses = remember { context.assets.list("licenses")?.sorted().orEmpty() }
 
     if (activeLicense != null) {
@@ -925,9 +735,9 @@ fun AboutScreen(onBack: () -> Unit) {
         AlertDialog(
             onDismissRequest = { activeLicense = null },
             confirmButton = {
-                ActionButton("Close", onClick = { activeLicense = null }, style = ActionStyle.Primary)
+                ActionButton(stringResource(R.string.close), onClick = { activeLicense = null }, style = ActionStyle.Primary)
             },
-            title = { Text(licenseName, style = Serifu.type.title, color = c.text) },
+            title = { Text(licenseLabel(licenseName), style = Serifu.type.title, color = c.text) },
             text = {
                 Column(
                     modifier = Modifier
@@ -938,7 +748,7 @@ fun AboutScreen(onBack: () -> Unit) {
                     Text(content, style = Serifu.type.monoSmall, color = c.textSecondary)
                 }
             },
-            shape = RoundedCornerShape(LinenDimens.DialogRadius),
+            shape = RoundedCornerShape(Serifu.radiusSurface),
             containerColor = c.surface,
             tonalElevation = 0.dp,
         )
@@ -954,16 +764,7 @@ fun AboutScreen(onBack: () -> Unit) {
     ) {
         TopBar(onBack = onBack, title = stringResource(R.string.about_title))
         Spacer(Modifier.height(8.dp))
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text("Serifu", fontFamily = DelaGothicOne, fontSize = 28.sp, color = c.text)
-            Text(
-                stringResource(R.string.brand_kana),
-                color = c.primary,
-                fontFamily = androidx.compose.ui.text.font.FontFamily.Default,
-                fontSize = 18.sp,
-                modifier = Modifier.padding(start = 8.dp, bottom = 2.dp),
-            )
-        }
+        BrandLockup()
         Spacer(Modifier.height(4.dp))
         Text(
             text = stringResource(R.string.version_format, version),
@@ -980,7 +781,7 @@ fun AboutScreen(onBack: () -> Unit) {
         SectionTitle(stringResource(R.string.licenses))
         licenses.forEach { name ->
             SettingLine(
-                label = name,
+                label = licenseLabel(name),
                 showChevron = true,
                 showHairline = true,
                 onClick = { activeLicense = name },
@@ -990,40 +791,12 @@ fun AboutScreen(onBack: () -> Unit) {
     }
 }
 
-@Composable
-private fun SerifuSlider(
-    label: String,
-    valueText: String,
-    value: Float,
-    range: ClosedFloatingPointRange<Float>,
-    steps: Int,
-    onChange: (Float) -> Unit,
-    subtitle: String? = null,
-) {
-    val c = Serifu.colors
-    Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(label, style = Serifu.type.body, color = c.text)
-            Text(valueText, style = Serifu.type.monoSmall, color = c.textSecondary)
-        }
-        if (subtitle != null) {
-            Text(subtitle, style = Serifu.type.caption, color = c.textSecondary, modifier = Modifier.padding(top = 2.dp))
-        }
-        Slider(
-            value = value,
-            onValueChange = onChange,
-            valueRange = range,
-            steps = steps,
-            colors = SliderDefaults.colors(
-                thumbColor = c.primary,
-                activeTrackColor = c.primary,
-                inactiveTrackColor = c.inactive,
-            ),
-        )
-        Hairline()
-    }
+private fun licenseLabel(file: String): String = when (file) {
+    "OFL-AtkinsonHyperlegible.txt" -> "Atkinson Hyperlegible"
+    "OFL-Bangers.txt" -> "Bangers"
+    "OFL-ComicNeue.txt" -> "Comic Neue"
+    "OFL-DelaGothicOne.txt" -> "Dela Gothic One"
+    "OFL-PatrickHand.txt" -> "Patrick Hand"
+    "mlkit-terms.txt" -> "ML Kit"
+    else -> file.substringBeforeLast('.')
 }

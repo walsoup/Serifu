@@ -5,18 +5,22 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import app.serifu.R
 import app.serifu.core.model.SourceLanguage
+import app.serifu.ui.design.Serifu
 
 /**
- * Authentic studio-quality comic pages (Japanese Manga, Korean Manhwa, Chinese Manhua)
- * with authentic manga screentones, artwork, dialogue bubbles, and onomatopoeia.
+ * One stick-figure page, drawn flat, in Japanese, Korean, and Chinese.
+ * A person waters a plastic plant, misses, and offers it a sun umbrella indoors.
  */
 @Composable
 fun SamplePage(
@@ -26,9 +30,9 @@ fun SamplePage(
     val context = LocalContext.current
     val bitmap = remember(language) {
         val assetName = when (language) {
-            SourceLanguage.JA -> "sample/sample_ja.jpg"
-            SourceLanguage.KO -> "sample/sample_ko.jpg"
-            SourceLanguage.ZH -> "sample/sample_zh.jpg"
+            SourceLanguage.JA -> "sample/sample_ja.png"
+            SourceLanguage.KO -> "sample/sample_ko.png"
+            SourceLanguage.ZH -> "sample/sample_zh.png"
         }
         runCatching {
             context.assets.open(assetName).use { stream ->
@@ -43,12 +47,19 @@ fun SamplePage(
 
         Image(
             bitmap = imageBitmap,
-            contentDescription = "${language.englishName} page",
+            contentDescription = stringResource(R.string.sample_page_description, language.englishName),
             modifier = modifier
                 .fillMaxWidth()
                 .padding(horizontal = 10.dp, vertical = 8.dp)
                 .aspectRatio(aspect),
             contentScale = ContentScale.FillWidth,
+        )
+    } else {
+        Text(
+            text = stringResource(R.string.sample_missing),
+            style = Serifu.type.body,
+            color = Serifu.colors.textSecondary,
+            modifier = modifier.padding(24.dp),
         )
     }
 }

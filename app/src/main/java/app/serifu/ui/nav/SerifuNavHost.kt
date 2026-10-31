@@ -88,6 +88,7 @@ fun SerifuNavHost(startAtOnboarding: Boolean) {
                 step = entry.arguments?.getInt("step") ?: 1,
                 viewModel = viewModel,
                 onStep = { step -> nav.navigate(Routes.onboarding(step)) },
+                onBack = { nav.popBackStack() },
                 onHome = {
                     nav.navigate(Routes.Home) {
                         popUpTo(nav.graph.id) { inclusive = true }
@@ -99,7 +100,7 @@ fun SerifuNavHost(startAtOnboarding: Boolean) {
         composable(Routes.Readers) { ReadersScreen(viewModel) { nav.popBackStack() } }
         composable(Routes.Lettering) { LetteringScreen(viewModel) { nav.popBackStack() } }
         composable(Routes.Behaviour) { BehaviourScreen(viewModel) { nav.popBackStack() } }
-        composable(Routes.Engine) { EngineScreen(viewModel) { nav.popBackStack() } }
+        composable(Routes.Engine) { EngineScreen { nav.popBackStack() } }
         composable(Routes.Debug) { DebugScreen(viewModel) { nav.popBackStack() } }
         composable(Routes.About) { AboutScreen { nav.popBackStack() } }
     }
