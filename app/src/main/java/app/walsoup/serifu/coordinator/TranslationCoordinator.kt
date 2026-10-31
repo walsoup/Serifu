@@ -40,6 +40,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -541,7 +542,7 @@ class TranslationCoordinator(
                         lettered.request != null &&
                         lettered.outcome != null
                     ) {
-                        launchProgressiveAiUpgrade(generation, frameW, frameH, frame.rotation, lettered)
+                        launchProgressiveAiUpgrade(generation, fingerprint, frameW, frameH, frame.rotation, lettered)
                     }
                 }
                 return
@@ -575,6 +576,7 @@ class TranslationCoordinator(
 
     private fun launchProgressiveAiUpgrade(
         generation: Long,
+        fingerprint: FrameFingerprint,
         frameW: Int,
         frameH: Int,
         rotation: Int,
@@ -602,10 +604,25 @@ class TranslationCoordinator(
                             timings = timings.copy(translateGemmaMs = aiMs)
                             publishTimings(timings)
                             overlays.canvas.updateTimings(timings)
+                            // Replace the base page so flipping back shows the AI translation.
+                            pageCache.put(
+                                fingerprint,
+                                rotation,
+                                settings.sourceLanguage,
+                                settings.targetLanguage,
+                                EngineId.MLKIT,
+                                upgraded,
+                            )
                             val pageId = rememberPage(upgraded)
                             send(Event.UpgradeReady(generation, pageId))
                         }
                     }
+                }
+            } catch (cancelled: CancellationException) {
+                if (cancelled is TimeoutCancellationException) {
+                    Log.w(TAG, "Progressive AI upgrade timed out", cancelled)
+                } else {
+                    throw cancelled
                 }
             } catch (t: Throwable) {
                 Log.w(TAG, "Progressive AI upgrade failed", t)
