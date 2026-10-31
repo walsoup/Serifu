@@ -77,4 +77,19 @@ class RemoteAiTranslationEngineTest {
         assertEquals(EngineId.AI_REMOTE, result.engine)
         assertEquals("Hello!", result.byId[1])
     }
+
+    @Test
+    fun configurationChangesProduceDifferentCacheConfigTags() {
+        val base = Settings(aiApiKey = "dummy-key", aiModel = "gpt-4o-mini", aiEndpoint = "https://api.openai.com/v1")
+        val engine = RemoteAiTranslationEngine(settingsProvider = { base })
+
+        val tagBase = engine.cacheConfigTag(base)
+        val tagDiffModel = engine.cacheConfigTag(base.copy(aiModel = "gemini-1.5-flash"))
+        val tagDiffEndpoint = engine.cacheConfigTag(base.copy(aiEndpoint = "https://custom.endpoint.com/v1"))
+        val tagDiffEffort = engine.cacheConfigTag(base.copy(reasoningEffort = app.serifu.core.model.ReasoningEffort.HIGH))
+
+        org.junit.Assert.assertNotEquals(tagBase, tagDiffModel)
+        org.junit.Assert.assertNotEquals(tagBase, tagDiffEndpoint)
+        org.junit.Assert.assertNotEquals(tagBase, tagDiffEffort)
+    }
 }

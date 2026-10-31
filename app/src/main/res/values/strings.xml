@@ -118,7 +118,7 @@
     <string name="ai_api_key_label">API Key</string>
     <string name="ai_api_key_placeholder">sk-... (optional for local models)</string>
     <string name="ai_model_label">Model Name</string>
-    <string name="ai_model_placeholder">gpt-6.1-luna</string>
+    <string name="ai_model_placeholder">gpt-4o-mini</string>
     <string name="ai_endpoint_label">Custom Endpoint</string>
     <string name="ai_endpoint_placeholder">https://api.openai.com/v1/chat/completions</string>
     <string name="reasoning_effort_label">Reasoning level</string>

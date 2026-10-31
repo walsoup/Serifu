@@ -150,7 +150,7 @@ class RemoteAiTranslationEngine(
 
     private fun callApi(settings: Settings, prompt: String, effort: String? = null): String {
         val apiKey = settings.aiApiKey.trim()
-        val model = settings.aiModel.trim().ifEmpty { "gpt-6.1-luna" }
+        val model = settings.aiModel.trim().ifEmpty { "gpt-4o-mini" }
         val rawEndpoint = settings.aiEndpoint.trim()
 
         val isGemini = rawEndpoint.contains("googleapis.com")
