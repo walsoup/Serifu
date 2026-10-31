@@ -182,6 +182,15 @@ class TranslationCoordinator(
         send(Event.PillTap)
     }
 
+    override fun onPillDoubleTap() {
+        if (overlays.isHudShowing) {
+            overlays.dismissHud(animated = true)
+            return
+        }
+        overlays.showHud(HudModel(settings.sourceLanguage, settings.mode, paused))
+        send(Event.HudOpened)
+    }
+
     override fun onPillOutside() {
         hideForGesture()
         if (overlays.isHudShowing) overlays.dismissHudImmediately()

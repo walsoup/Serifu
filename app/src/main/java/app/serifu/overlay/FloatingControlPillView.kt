@@ -8,6 +8,7 @@ import android.graphics.DashPathEffect
 import android.graphics.Paint
 import android.graphics.RectF
 import android.os.Build
+import android.os.SystemClock
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
@@ -33,6 +34,7 @@ interface PillHost {
     fun updateLayout(params: WindowManager.LayoutParams)
     fun geometry(): ScreenGeometry
     fun onTap()
+    fun onDoubleTap()
     fun onOutside()
     fun onLongPress()
     fun onDocked(side: PillSide, yFraction: Float)
@@ -84,10 +86,26 @@ class FloatingControlPillView(context: Context) : View(context) {
     private val slop = ViewConfiguration.get(context).scaledTouchSlop
     private val tapTimeout = ViewConfiguration.getTapTimeout().toLong()
     private val longPressTimeout = ViewConfiguration.getLongPressTimeout().toLong()
+    private val doubleTapSlop = ViewConfiguration.get(context).scaledDoubleTapSlop
+    private val doubleTapTimeout = 250L
+
+    private var lastTapUpTime = 0L
+    private var lastTapUpX = 0f
+    private var lastTapUpY = 0f
+    private var isPotentialDoubleTap = false
+
+    private val singleTapRunnable = Runnable {
+        lastTapUpTime = 0L
+        isPotentialDoubleTap = false
+        host?.onTap()
+    }
 
     private val longPressRunnable = Runnable {
         if (!dragging) {
             longPressed = true
+            isPotentialDoubleTap = false
+            lastTapUpTime = 0L
+            removeCallbacks(singleTapRunnable)
             haptic(Haptic.LONG_PRESS)
             host?.onLongPress()
         }
@@ -178,6 +196,7 @@ class FloatingControlPillView(context: Context) : View(context) {
         spinner.cancel()
         spring?.cancel()
         removeCallbacks(longPressRunnable)
+        removeCallbacks(singleTapRunnable)
         removeCallbacks(idleRunnable)
         removeCallbacks(stopBreathe)
         super.onDetachedFromWindow()
@@ -186,6 +205,9 @@ class FloatingControlPillView(context: Context) : View(context) {
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_OUTSIDE -> {
+                isPotentialDoubleTap = false
+                lastTapUpTime = 0L
+                removeCallbacks(singleTapRunnable)
                 host?.onOutside()
                 return true
             }
@@ -203,6 +225,15 @@ class FloatingControlPillView(context: Context) : View(context) {
                     grabDx = event.rawX - layout.x
                     grabDy = event.rawY - layout.y
                 }
+                val now = SystemClock.uptimeMillis()
+                if (lastTapUpTime > 0L && (now - lastTapUpTime) < doubleTapTimeout &&
+                    hypot(event.rawX - lastTapUpX, event.rawY - lastTapUpY) < doubleTapSlop
+                ) {
+                    isPotentialDoubleTap = true
+                    removeCallbacks(singleTapRunnable)
+                } else {
+                    isPotentialDoubleTap = false
+                }
                 removeCallbacks(longPressRunnable)
                 postDelayed(longPressRunnable, longPressTimeout)
                 return true
@@ -211,6 +242,9 @@ class FloatingControlPillView(context: Context) : View(context) {
                 val distance = hypot(event.rawX - downRawX, event.rawY - downRawY)
                 if (!dragging && distance > slop) {
                     dragging = true
+                    isPotentialDoubleTap = false
+                    lastTapUpTime = 0L
+                    removeCallbacks(singleTapRunnable)
                     removeCallbacks(longPressRunnable)
                     setLayerType(LAYER_TYPE_SOFTWARE, null)
                 }
@@ -229,10 +263,29 @@ class FloatingControlPillView(context: Context) : View(context) {
                 removeCallbacks(longPressRunnable)
                 if (dragging) {
                     dragging = false
+                    isPotentialDoubleTap = false
+                    lastTapUpTime = 0L
+                    removeCallbacks(singleTapRunnable)
                     setLayerType(LAYER_TYPE_NONE, null)
                     springToNearestEdge()
                 } else if (!longPressed && event.actionMasked == MotionEvent.ACTION_UP) {
-                    host?.onTap()
+                    if (isPotentialDoubleTap) {
+                        isPotentialDoubleTap = false
+                        lastTapUpTime = 0L
+                        removeCallbacks(singleTapRunnable)
+                        haptic(Haptic.CONFIRM)
+                        host?.onDoubleTap()
+                    } else {
+                        lastTapUpTime = SystemClock.uptimeMillis()
+                        lastTapUpX = event.rawX
+                        lastTapUpY = event.rawY
+                        removeCallbacks(singleTapRunnable)
+                        postDelayed(singleTapRunnable, doubleTapTimeout)
+                    }
+                } else {
+                    isPotentialDoubleTap = false
+                    lastTapUpTime = 0L
+                    removeCallbacks(singleTapRunnable)
                 }
                 wake()
                 invalidate()

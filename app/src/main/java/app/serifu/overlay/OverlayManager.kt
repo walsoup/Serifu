@@ -18,6 +18,7 @@ import app.serifu.core.model.TriggerMode
 
 interface OverlayEvents {
     fun onPillTap()
+    fun onPillDoubleTap()
     fun onPillOutside()
     fun onPillLongPress()
     fun onPillDocked(side: PillSide, yFraction: Float)
@@ -212,6 +213,8 @@ class OverlayManager(
     }
 
     override fun onTap() = events?.onPillTap() ?: Unit
+
+    override fun onDoubleTap() = events?.onPillDoubleTap() ?: Unit
 
     override fun onOutside() = events?.onPillOutside() ?: Unit
 

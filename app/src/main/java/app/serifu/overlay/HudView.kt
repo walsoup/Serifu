@@ -66,9 +66,15 @@ class HudView(context: Context) : LinearLayout(context) {
             orientation = HORIZONTAL
             layoutParams = LayoutParams(LayoutParams.WRAP_CONTENT, dp(Tuning.HUD_ROW_HEIGHT_DP))
             SourceLanguage.entries.forEach { language ->
-                addView(segment(language.nativeName, language == model.source, letterSpace = false, minWidthPx = dp(60)) {
+                val view = segment(language.nativeName, language == model.source, letterSpace = false, minWidthPx = dp(60)) {
                     host?.onSource(language)
-                })
+                }
+                addView(view)
+                if (language == model.source) {
+                    langScroll.post {
+                        langScroll.smoothScrollTo((view.left - dp(16)).coerceAtLeast(0), 0)
+                    }
+                }
             }
         }
         langScroll.addView(langRow)
