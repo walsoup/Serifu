@@ -43,6 +43,13 @@ class RemoteAiTranslationEngine(
     fun isConfigured(settings: Settings = settingsProvider()): Boolean =
         settings.aiApiKey.isNotBlank() || settings.aiEndpoint.isNotBlank()
 
+    /**
+     * Non-secret identity of the remote configuration, mixed into cache keys so a
+     * model, endpoint or effort change cannot serve translations from the old config.
+     */
+    internal fun cacheConfigTag(settings: Settings = settingsProvider()): String =
+        "${settings.aiModel.trim()}|${settings.aiEndpoint.trim().substringBefore('?')}|${settings.reasoningEffort.name}"
+
     override suspend fun availability(
         source: app.serifu.core.model.SourceLanguage,
         target: String,
@@ -60,12 +67,13 @@ class RemoteAiTranslationEngine(
             if (!isConfigured(settings)) {
                 throw IllegalStateException("API not configured")
             }
+            val configTag = cacheConfigTag(settings)
 
             val translated = HashMap<Int, String>()
             val pending = ArrayList<app.serifu.core.translate.BubbleText>()
             for (bubble in request.bubbles) {
                 if (bubble.text.isBlank()) continue
-                val cached = cache.get(cache.key(id, request.target, "${request.source.tag}|${bubble.text}"))
+                val cached = cache.get(cache.key(id, request.target, "$configTag|${request.source.tag}|${bubble.text}"))
                 if (cached != null) {
                     translated[bubble.id] = cached
                 } else {
@@ -85,12 +93,12 @@ class RemoteAiTranslationEngine(
             }
 
             val parsed = LlmResponseParser.parse(rawContent, fallback)
-            Log.i(TAG, "Translated ${pending.size} bubbles via AI: $parsed")
+            Log.i(TAG, "Translated ${pending.size} bubbles via AI")
             for (bubble in pending) {
                 val text = parsed[bubble.id] ?: bubble.text
                 translated[bubble.id] = text
                 if (text != bubble.text) {
-                    cache.put(cache.key(id, request.target, "${request.source.tag}|${bubble.text}"), text)
+                    cache.put(cache.key(id, request.target, "$configTag|${request.source.tag}|${bubble.text}"), text)
                 }
             }
 
@@ -136,7 +144,7 @@ class RemoteAiTranslationEngine(
         val rawEndpoint = settings.aiEndpoint.trim()
 
         val isGemini = rawEndpoint.contains("googleapis.com")
-        Log.i(TAG, "Calling AI: model=$model, effort=$effort, endpoint=$rawEndpoint")
+        Log.i(TAG, "Calling AI: model=$model, effort=$effort")
 
         val targetUrl = when {
             isGemini -> {
