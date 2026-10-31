@@ -14,7 +14,7 @@ Home picks the source script and the trigger. Auto translates after the page sto
 
 <img src="docs/home.png" width="360" alt="Home with Japanese selected">
 
-The sample page includes the full Volume 1 of *Say Hello to Black Jack* (ブラックジャックによろしく, 209 pages, public domain / 二次利用フリー) for vertical-scroll reading and live lettering, as well as a multi-language stick-figure comic test page. Translate runs OCR, clustering, translation, and lettering. Boxes draws the regions the clusterer found. Tap the page to hide the toolbar.
+The sample page includes the full Volume 1 of *Give My Regards to Black Jack* (ブラックジャックによろしく) by SHUHO SATO (佐藤秀峰), 209 pages, shared by the author under free secondary-use terms (二次利用フリー) for vertical-scroll reading and live lettering, as well as a multi-language stick-figure comic test page. Translate runs OCR, clustering, translation, and lettering. Boxes draws the regions the clusterer found. Tap the page to hide the toolbar.
 
 <img src="docs/sample.png" width="360" alt="Japanese sample page, with the toolbar under the status bar">
 
@@ -96,6 +96,14 @@ On a device:
 ## Build
 
 The debug build needs JDK 17. `./gradlew :app:assembleDebug` writes the debug APK.
+
+## Licenses
+
+Serifu's own code is source-available under the PolyForm Noncommercial License 1.0.0 (see LICENSE): reading, modifying and sharing for non-commercial purposes is fine, while commercial use needs permission. It is not an open-source license.
+
+- `linen/` is the Linen design system, all rights reserved (see `linen/LICENSE`).
+- The lettering fonts are under the SIL Open Font License (see `app/src/main/assets/licenses/`).
+- The bundled sample manga is *Give My Regards to Black Jack* (ブラックジャックによろしく) by SHUHO SATO (佐藤秀峰), used under the author's secondary-use terms (<https://densho810.com/free/>), not under the app's license.
 
 ## Status
 
