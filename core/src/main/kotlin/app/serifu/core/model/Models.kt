@@ -32,6 +32,14 @@ enum class QualityMode {
     BEST_ONLY,
 }
 
+enum class ReasoningEffort(val tag: String, val label: String) {
+    NONE("none", "None"),
+    AUTO("auto", "Auto"),
+    LOW("low", "Low"),
+    MEDIUM("medium", "Medium"),
+    HIGH("high", "High");
+}
+
 enum class BubbleKind {
     DIALOGUE,
     CAPTION,

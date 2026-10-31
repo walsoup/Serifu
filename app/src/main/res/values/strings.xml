@@ -121,6 +121,8 @@
     <string name="ai_model_placeholder">gpt-6.1-luna</string>
     <string name="ai_endpoint_label">Custom Endpoint</string>
     <string name="ai_endpoint_placeholder">https://api.openai.com/v1/chat/completions</string>
+    <string name="reasoning_effort_label">Reasoning level</string>
+    <string name="reasoning_effort_desc">Lower reasoning speeds up translation. If set to None and unsupported by the model, Serifu falls back automatically.</string>
     <string name="ai_configured">Configured</string>
     <string name="ai_not_configured">Not configured</string>
     <string name="developer_label">Developer</string>

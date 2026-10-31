@@ -21,13 +21,13 @@ fun loadDotEnv(file: java.io.File): Map<String, String> {
 }
 
 android {
-    namespace = "app.serifu"
+    namespace = "app.walsoup.serifu"
     // The spec pins compileSdk 36. Compose 1.12.1, Navigation 2.10.2 and core-ktx 1.19.1
     // (the October 2026 stables) require compileSdk 37. targetSdk stays 36.
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "app.serifu"
+        applicationId = "app.walsoup.serifu"
         minSdk = 30
         targetSdk = 36
         versionCode = 3

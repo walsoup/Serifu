@@ -6,7 +6,7 @@
 
 Serifu translates manga, manhua, and manhwa on an Android phone. It screenshots a reader you choose, finds the bubbles, and draws English over them. CJK and Latin scripts (Japanese, Chinese, Korean, French, Spanish, German, Italian, Portuguese, Russian) are supported. Offline translation is handled by ML Kit on the device, with an optional OpenAI-compatible cloud backend for LLM translation. The language pack is a one-time download of about 30 MB.
 
-This tree is version 0.6.0-beta, with `applicationId` `app.serifu` and `minSdk` 30.
+This tree is version 0.6.0-beta, with `applicationId` `app.walsoup.serifu` and `minSdk` 30.
 
 ## Pages
 

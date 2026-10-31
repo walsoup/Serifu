@@ -14,11 +14,11 @@ install_apk() {
 
 install_apk app/build/outputs/apk/debug/app-debug.apk
 install_apk app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
-adb shell pm list packages | grep app.serifu || { echo "INSTALL VERIFY FAILED"; exit 1; }
+adb shell pm list packages | grep app.walsoup.serifu || { echo "INSTALL VERIFY FAILED"; exit 1; }
 adb shell input keyevent KEYCODE_WAKEUP || true
 adb shell wm dismiss-keyguard || true
 pair_status=0
-adb shell am instrument -w -e class app.serifu.SvgPanelPairTest app.serifu.test/androidx.test.runner.AndroidJUnitRunner || pair_status=$?
+adb shell am instrument -w -e class app.walsoup.serifu.SvgPanelPairTest app.walsoup.serifu.test/androidx.test.runner.AndroidJUnitRunner || pair_status=$?
 mkdir -p ci-shots
 if [ "$pair_status" -ne 0 ]; then
   adb logcat -d -t 400 -s MlKitTranslate:D MlKitTranslate:W AndroidRuntime:E TestRunner:E > ci-shots/pair-logcat.txt || true
@@ -31,19 +31,19 @@ for f in \
 do
   adb pull /sdcard/Download/$f ci-shots/$f || true
 done
-timeout 12m adb shell am instrument -w -e class app.serifu.PipelineOnTestPageTest app.serifu.test/androidx.test.runner.AndroidJUnitRunner || true
+timeout 12m adb shell am instrument -w -e class app.walsoup.serifu.PipelineOnTestPageTest app.walsoup.serifu.test/androidx.test.runner.AndroidJUnitRunner || true
 for f in serifu-shot-0.png serifu-shot-1.png serifu-shot-2.png; do
   adb pull /sdcard/Download/$f ci-shots/$f || true
 done
 ls -la ci-shots || true
 
 for attempt in 1 2 3; do
-  adb shell am start -W -n app.serifu/.ui.MainActivity || true
+  adb shell am start -W -n app.walsoup.serifu/.ui.MainActivity || true
   sleep 12
   FOCUS=$(adb shell dumpsys window | grep -m1 mCurrentFocus || true)
   echo "attempt $attempt focus: $FOCUS"
   case "$FOCUS" in
-    *app.serifu*) break ;;
+    *app.walsoup.serifu*) break ;;
   esac
   # Slow emulator: dismiss a system ANR dialog via its Wait button if present.
   adb shell uiautomator dump /sdcard/window_dump.xml >/dev/null 2>&1 || true
@@ -61,7 +61,7 @@ ls -la screenshot-home.png
 FINAL=$(adb shell dumpsys window | grep -m1 mCurrentFocus || true)
 echo "final focus: $FINAL"
 case "$FINAL" in
-  *app.serifu*) ;;
+  *app.walsoup.serifu*) ;;
   *) echo "APP NOT FOREGROUND"; exit 1 ;;
 esac
 if [ "$pair_status" -ne 0 ]; then

@@ -139,7 +139,7 @@ object Tuning {
      * Four seconds returns the source line, which then looks like a translation.
      */
     const val MLKIT_TRANSLATE_COLD_TIMEOUT_MS = 90_000L
-    const val AI_REMOTE_TIMEOUT_MS = 12_000L
+    const val AI_REMOTE_TIMEOUT_MS = 30_000L
     const val EMPTY_PAGE_RETRY_WINDOW_MS = 3_000L
     const val EMPTY_PAGE_RETRY_MAX = 2
     const val EMPTY_PAGE_RETRY_FIRST_MS = 800L
