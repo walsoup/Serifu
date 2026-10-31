@@ -13,4 +13,6 @@ object SerifuIcons {
     @DrawableRes val Book = R.drawable.ic_book
     @DrawableRes val Gear = R.drawable.ic_gear
     @DrawableRes val Eye = R.drawable.ic_eye
+    @DrawableRes val EyeOff = R.drawable.ic_eye_off
+    @DrawableRes val Close = R.drawable.ic_close
 }

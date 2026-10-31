@@ -1,6 +1,7 @@
 package app.serifu.ui.settings
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -30,13 +31,26 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.runtime.saveable.rememberSaveable
+import kotlinx.coroutines.delay
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import app.serifu.ui.components.SerifuIcons
+import app.serifu.core.model.QualityMode
 import app.serifu.ui.testpage.TestPageActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -590,57 +604,180 @@ fun EngineScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
             color = c.textSecondary,
         )
 
-        SectionTitle(stringResource(R.string.quality_label))
+        SectionTitle(stringResource(R.string.engine_mode_label))
         Row(
-            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Pill(
-                text = stringResource(R.string.quality_fast),
-                selected = settings.quality == app.serifu.core.model.QualityMode.FAST,
-                onClick = { viewModel.update { it.copy(quality = app.serifu.core.model.QualityMode.FAST) } },
+                text = stringResource(R.string.engine_on_device),
+                selected = settings.quality == QualityMode.FAST,
+                onClick = { viewModel.update { it.copy(quality = QualityMode.FAST) } },
+                modifier = Modifier.weight(1f),
             )
             Pill(
-                text = stringResource(R.string.quality_progressive),
-                selected = settings.quality == app.serifu.core.model.QualityMode.BEST_PROGRESSIVE,
-                onClick = { viewModel.update { it.copy(quality = app.serifu.core.model.QualityMode.BEST_PROGRESSIVE) } },
-            )
-            Pill(
-                text = stringResource(R.string.quality_best),
-                selected = settings.quality == app.serifu.core.model.QualityMode.BEST_ONLY,
-                onClick = { viewModel.update { it.copy(quality = app.serifu.core.model.QualityMode.BEST_ONLY) } },
+                text = stringResource(R.string.engine_api),
+                selected = settings.quality == QualityMode.BEST_ONLY || settings.quality == QualityMode.BEST_PROGRESSIVE,
+                onClick = { viewModel.update { it.copy(quality = QualityMode.BEST_ONLY) } },
+                modifier = Modifier.weight(1f),
             )
         }
-
-        SectionTitle(stringResource(R.string.engine_ai_title))
+        Spacer(Modifier.height(8.dp))
         Text(
-            text = stringResource(R.string.engine_ai_body),
+            text = stringResource(
+                if (settings.quality == QualityMode.FAST) R.string.engine_on_device_desc
+                else R.string.engine_api_desc,
+            ),
+            style = Serifu.type.caption,
+            color = c.textSecondary,
+        )
+
+        SectionTitle(stringResource(R.string.engine_api_title))
+        Text(
+            text = stringResource(R.string.engine_api_body),
             style = Serifu.type.bodySecondary,
             color = c.textSecondary,
         )
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(12.dp))
+
+        var keyFocus by remember { mutableStateOf(false) }
+        var modelFocus by remember { mutableStateOf(false) }
+        var endpointFocus by remember { mutableStateOf(false) }
+
+        var localKey by rememberSaveable { mutableStateOf(settings.aiApiKey) }
+        var localModel by rememberSaveable { mutableStateOf(settings.aiModel) }
+        var localEndpoint by rememberSaveable { mutableStateOf(settings.aiEndpoint) }
+        var showPassword by remember { mutableStateOf(false) }
+
+        // Sync from external settings updates only when user is not actively typing
+        LaunchedEffect(settings.aiApiKey) {
+            if (!keyFocus) localKey = settings.aiApiKey
+        }
+        LaunchedEffect(settings.aiModel) {
+            if (!modelFocus) localModel = settings.aiModel
+        }
+        LaunchedEffect(settings.aiEndpoint) {
+            if (!endpointFocus) localEndpoint = settings.aiEndpoint
+        }
+
+        // Debounce DataStore writes to avoid disk I/O churn and cursor jitter
+        LaunchedEffect(localKey) {
+            delay(300)
+            if (localKey != settings.aiApiKey) {
+                viewModel.update { it.copy(aiApiKey = localKey) }
+            }
+        }
+        LaunchedEffect(localModel) {
+            delay(300)
+            if (localModel != settings.aiModel) {
+                viewModel.update { it.copy(aiModel = localModel) }
+            }
+        }
+        LaunchedEffect(localEndpoint) {
+            delay(300)
+            if (localEndpoint != settings.aiEndpoint) {
+                viewModel.update { it.copy(aiEndpoint = localEndpoint) }
+            }
+        }
+
         GroupLabel(stringResource(R.string.ai_api_key_label))
         Spacer(Modifier.height(4.dp))
         SerifuTextField(
-            value = settings.aiApiKey,
-            onValueChange = { key -> viewModel.update { it.copy(aiApiKey = key) } },
+            value = localKey,
+            onValueChange = { localKey = it },
             placeholder = stringResource(R.string.ai_api_key_placeholder),
+            modifier = Modifier.onFocusChanged { keyFocus = it.isFocused },
+            visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Password,
+                imeAction = ImeAction.Next,
+                autoCorrectEnabled = false,
+            ),
+            trailingIcon = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (localKey.isNotEmpty()) {
+                        IconButton(onClick = {
+                            localKey = ""
+                            viewModel.update { it.copy(aiApiKey = "") }
+                        }) {
+                            Icon(
+                                painter = painterResource(SerifuIcons.Close),
+                                contentDescription = "Clear key",
+                                tint = c.textSecondary,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
+                    }
+                    IconButton(onClick = { showPassword = !showPassword }) {
+                        Icon(
+                            painter = painterResource(if (showPassword) SerifuIcons.EyeOff else SerifuIcons.Eye),
+                            contentDescription = if (showPassword) "Hide key" else "Show key",
+                            tint = c.textSecondary,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                }
+            },
         )
         Spacer(Modifier.height(10.dp))
+
         GroupLabel(stringResource(R.string.ai_model_label))
         Spacer(Modifier.height(4.dp))
         SerifuTextField(
-            value = settings.aiModel,
-            onValueChange = { model -> viewModel.update { it.copy(aiModel = model) } },
+            value = localModel,
+            onValueChange = { localModel = it },
             placeholder = stringResource(R.string.ai_model_placeholder),
+            modifier = Modifier.onFocusChanged { modelFocus = it.isFocused },
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Ascii,
+                imeAction = ImeAction.Next,
+                autoCorrectEnabled = false,
+            ),
+            trailingIcon = if (localModel.isNotEmpty()) {
+                {
+                    IconButton(onClick = {
+                        localModel = ""
+                        viewModel.update { it.copy(aiModel = "") }
+                    }) {
+                        Icon(
+                            painter = painterResource(SerifuIcons.Close),
+                            contentDescription = "Clear model",
+                            tint = c.textSecondary,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
+                }
+            } else null,
         )
         Spacer(Modifier.height(10.dp))
+
         GroupLabel(stringResource(R.string.ai_endpoint_label))
         Spacer(Modifier.height(4.dp))
         SerifuTextField(
-            value = settings.aiEndpoint,
-            onValueChange = { ep -> viewModel.update { it.copy(aiEndpoint = ep) } },
+            value = localEndpoint,
+            onValueChange = { localEndpoint = it },
             placeholder = stringResource(R.string.ai_endpoint_placeholder),
+            modifier = Modifier.onFocusChanged { endpointFocus = it.isFocused },
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Uri,
+                imeAction = ImeAction.Done,
+                autoCorrectEnabled = false,
+            ),
+            trailingIcon = if (localEndpoint.isNotEmpty()) {
+                {
+                    IconButton(onClick = {
+                        localEndpoint = ""
+                        viewModel.update { it.copy(aiEndpoint = "") }
+                    }) {
+                        Icon(
+                            painter = painterResource(SerifuIcons.Close),
+                            contentDescription = "Clear endpoint",
+                            tint = c.textSecondary,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
+                }
+            } else null,
         )
 
         SectionTitle(stringResource(R.string.engine_mlkit))
@@ -843,6 +980,28 @@ fun AboutScreen(onBack: () -> Unit) {
                 onClick = { activeLicense = name },
             )
         }
+
+        SectionTitle(stringResource(R.string.developer_label))
+        SettingLine(
+            label = stringResource(R.string.developer_github_label),
+            value = stringResource(R.string.developer_github_value),
+            showChevron = true,
+            showHairline = true,
+            onClick = {
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/walsoup"))
+                runCatching { context.startActivity(intent) }
+            },
+        )
+        SettingLine(
+            label = stringResource(R.string.source_code_label),
+            value = stringResource(R.string.source_code_value),
+            showChevron = true,
+            showHairline = false,
+            onClick = {
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/walsoup/Serifu"))
+                runCatching { context.startActivity(intent) }
+            },
+        )
         Spacer(Modifier.height(24.dp))
     }
 }

@@ -215,9 +215,8 @@ fun HomeScreen(viewModel: HomeViewModel, onNavigate: (String) -> Unit) {
                 onClick = { onNavigate(Routes.Behaviour) },
             )
             val engineValue = when (settings.quality) {
-                QualityMode.FAST -> stringResource(R.string.quality_fast)
-                QualityMode.BEST_PROGRESSIVE -> stringResource(R.string.quality_progressive)
-                QualityMode.BEST_ONLY -> stringResource(R.string.quality_best)
+                QualityMode.FAST -> stringResource(R.string.engine_on_device)
+                QualityMode.BEST_PROGRESSIVE, QualityMode.BEST_ONLY -> stringResource(R.string.engine_api)
             }
             SettingLine(
                 label = stringResource(R.string.engine_label),
@@ -237,7 +236,7 @@ fun HomeScreen(viewModel: HomeViewModel, onNavigate: (String) -> Unit) {
                 showHairline = false,
             )
 
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(100.dp))
         }
 
         // Thumb zone: exactly one primary action, chosen by what is blocking the user.

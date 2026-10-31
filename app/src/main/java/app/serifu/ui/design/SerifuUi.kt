@@ -27,6 +27,11 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -473,39 +478,46 @@ fun SerifuSwitch(checked: Boolean) {
     )
 }
 
-/** Primary text field with a soft border. */
+/** Primary text field built with Linen OutlinedTextField styling. */
 @Composable
 fun SerifuTextField(
     value: String,
     onValueChange: (String) -> Unit,
     placeholder: String,
     modifier: Modifier = Modifier,
+    label: String? = null,
+    singleLine: Boolean = true,
+    visualTransformation: VisualTransformation = VisualTransformation.None,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    keyboardActions: KeyboardActions = KeyboardActions.Default,
+    trailingIcon: (@Composable () -> Unit)? = null,
 ) {
     val c = Serifu.colors
     val shape = RoundedCornerShape(12.dp)
-    BasicTextField(
+    OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
-        singleLine = true,
+        modifier = modifier.fillMaxWidth(),
+        label = if (label != null) { { Text(label, style = Serifu.type.caption) } } else null,
+        placeholder = { Text(placeholder, style = Serifu.type.body, color = c.muted) },
+        singleLine = singleLine,
         textStyle = Serifu.type.body.copy(color = c.text),
-        modifier = modifier
-            .fillMaxWidth()
-            .heightIn(min = 52.dp)
-            .clip(shape)
-            .background(c.surface)
-            .border(1.5.dp, c.hairline, shape),
-        cursorBrush = SolidColor(c.primary),
-        decorationBox = { inner ->
-            Box(
-                Modifier.heightIn(min = 52.dp).padding(horizontal = 18.dp),
-                contentAlignment = Alignment.CenterStart,
-            ) {
-                if (value.isEmpty()) {
-                    Text(placeholder, style = Serifu.type.body, color = c.muted)
-                }
-                inner()
-            }
-        },
+        visualTransformation = visualTransformation,
+        keyboardOptions = keyboardOptions,
+        keyboardActions = keyboardActions,
+        trailingIcon = trailingIcon,
+        shape = shape,
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedTextColor = c.text,
+            unfocusedTextColor = c.text,
+            focusedContainerColor = c.surface,
+            unfocusedContainerColor = c.surface,
+            focusedBorderColor = c.primary,
+            unfocusedBorderColor = c.hairline,
+            focusedLabelColor = c.primary,
+            unfocusedLabelColor = c.textSecondary,
+            cursorColor = c.primary,
+        ),
     )
 }
 

@@ -17,12 +17,22 @@ class RemoteAiTranslationEngineTest {
 
     @Test
     fun unconfiguredEngineReportsUnsupported() = runBlocking {
-        val settings = Settings(aiApiKey = "")
+        val settings = Settings(aiApiKey = "", aiEndpoint = "")
         val engine = RemoteAiTranslationEngine(settingsProvider = { settings })
 
         assertFalse(engine.isConfigured())
         val avail = engine.availability(SourceLanguage.JA, "en")
         assertTrue(avail is EngineAvailability.Unsupported)
+    }
+
+    @Test
+    fun configuredEngineWithEndpointOnlyReportsReady() = runBlocking {
+        val settings = Settings(aiApiKey = "", aiEndpoint = "http://localhost:11434")
+        val engine = RemoteAiTranslationEngine(settingsProvider = { settings })
+
+        assertTrue(engine.isConfigured())
+        val avail = engine.availability(SourceLanguage.JA, "en")
+        assertTrue(avail is EngineAvailability.Ready)
     }
 
     @Test

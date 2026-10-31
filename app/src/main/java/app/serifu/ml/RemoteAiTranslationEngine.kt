@@ -40,7 +40,7 @@ class RemoteAiTranslationEngine(
     }
 
     fun isConfigured(settings: Settings = settingsProvider()): Boolean =
-        settings.aiApiKey.isNotBlank()
+        settings.aiApiKey.isNotBlank() || settings.aiEndpoint.isNotBlank()
 
     override suspend fun availability(
         source: app.serifu.core.model.SourceLanguage,
@@ -49,7 +49,7 @@ class RemoteAiTranslationEngine(
         return if (isConfigured()) {
             EngineAvailability.Ready
         } else {
-            EngineAvailability.Unsupported("AI API key not configured")
+            EngineAvailability.Unsupported("API endpoint or key not configured")
         }
     }
 
@@ -57,7 +57,7 @@ class RemoteAiTranslationEngine(
         withContext(Dispatchers.IO) {
             val settings = settingsProvider()
             if (!isConfigured(settings)) {
-                throw IllegalStateException("AI API key not configured")
+                throw IllegalStateException("API not configured")
             }
 
             val translated = HashMap<Int, String>()
@@ -161,7 +161,7 @@ class RemoteAiTranslationEngine(
             readTimeout = Tuning.AI_REMOTE_TIMEOUT_MS.toInt()
             doOutput = true
             setRequestProperty("Content-Type", "application/json; charset=utf-8")
-            if (!isGemini) {
+            if (!isGemini && apiKey.isNotBlank()) {
                 setRequestProperty("Authorization", "Bearer $apiKey")
             }
         }
