@@ -12,6 +12,7 @@ import com.google.mlkit.vision.text.TextRecognizer
 import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions
 import com.google.mlkit.vision.text.japanese.JapaneseTextRecognizerOptions
 import com.google.mlkit.vision.text.korean.KoreanTextRecognizerOptions
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import kotlinx.coroutines.tasks.await
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -67,6 +68,7 @@ class OcrEngine {
             SourceLanguage.JA -> JapaneseTextRecognizerOptions.Builder().build()
             SourceLanguage.ZH -> ChineseTextRecognizerOptions.Builder().build()
             SourceLanguage.KO -> KoreanTextRecognizerOptions.Builder().build()
+            else -> TextRecognizerOptions.DEFAULT_OPTIONS
         }
         TextRecognition.getClient(options)
     }

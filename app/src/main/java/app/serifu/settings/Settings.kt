@@ -31,4 +31,7 @@ data class Settings(
     val debugOverlay: Boolean = false,
     val dynamicColor: Boolean = false,
     val onboardingDone: Boolean = true,
+    val aiApiKey: String = "",
+    val aiModel: String = "gemini-2.0-flash",
+    val aiEndpoint: String = "",
 )

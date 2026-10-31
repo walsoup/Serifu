@@ -38,6 +38,9 @@ internal object SettingsKeys {
     val debugOverlay = booleanPreferencesKey("debugOverlay")
     val dynamicColor = booleanPreferencesKey("dynamicColor")
     val onboardingDone = booleanPreferencesKey("onboardingDone")
+    val aiApiKey = stringPreferencesKey("aiApiKey")
+    val aiModel = stringPreferencesKey("aiModel")
+    val aiEndpoint = stringPreferencesKey("aiEndpoint")
 }
 
 internal fun Settings.writeTo(prefs: MutablePreferences) {
@@ -63,6 +66,9 @@ internal fun Settings.writeTo(prefs: MutablePreferences) {
     prefs[SettingsKeys.debugOverlay] = debugOverlay
     prefs[SettingsKeys.dynamicColor] = dynamicColor
     prefs[SettingsKeys.onboardingDone] = onboardingDone
+    prefs[SettingsKeys.aiApiKey] = aiApiKey
+    prefs[SettingsKeys.aiModel] = aiModel
+    prefs[SettingsKeys.aiEndpoint] = aiEndpoint
 }
 
 internal fun Preferences.toSettings(defaultReaders: Set<String>): Settings {
@@ -90,6 +96,9 @@ internal fun Preferences.toSettings(defaultReaders: Set<String>): Settings {
         debugOverlay = this[SettingsKeys.debugOverlay] ?: defaults.debugOverlay,
         dynamicColor = this[SettingsKeys.dynamicColor] ?: defaults.dynamicColor,
         onboardingDone = this[SettingsKeys.onboardingDone] ?: defaults.onboardingDone,
+        aiApiKey = this[SettingsKeys.aiApiKey] ?: defaults.aiApiKey,
+        aiModel = this[SettingsKeys.aiModel] ?: defaults.aiModel,
+        aiEndpoint = this[SettingsKeys.aiEndpoint] ?: defaults.aiEndpoint,
     )
 }
 

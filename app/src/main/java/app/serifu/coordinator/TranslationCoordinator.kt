@@ -525,6 +525,14 @@ class TranslationCoordinator(
                     )
                     snapshotPrev(frame)
                     send(Event.PageReady(generation, rememberPage(page)))
+
+                    if (settings.quality == app.serifu.core.model.QualityMode.BEST_PROGRESSIVE &&
+                        pipeline.hasAiConfigured(settings) &&
+                        lettered.request != null &&
+                        lettered.outcome != null
+                    ) {
+                        launchProgressiveAiUpgrade(generation, frameW, frameH, frame.rotation, lettered)
+                    }
                 }
                 return
             }
@@ -553,6 +561,46 @@ class TranslationCoordinator(
             return
         }
         showCurrent(pageId, crossfade = true)
+    }
+
+    private fun launchProgressiveAiUpgrade(
+        generation: Long,
+        frameW: Int,
+        frameH: Int,
+        rotation: Int,
+        lettered: PagePipeline.Lettering,
+    ) {
+        val request = lettered.request ?: return
+        val outcome = lettered.outcome ?: return
+        scope.launch(Dispatchers.IO) {
+            val aiStart = clock()
+            try {
+                val upgraded = pipeline.translateWithAi(
+                    request = request,
+                    clusters = lettered.clusters,
+                    frameW = frameW,
+                    frameH = frameH,
+                    rotation = rotation,
+                    retiled = lettered.retiled,
+                    outcome = outcome,
+                    settings = settings,
+                )
+                val aiMs = (clock() - aiStart).coerceAtLeast(0)
+                if (generation == state.generation && upgraded != null) {
+                    withContext(Dispatchers.Main) {
+                        if (generation == state.generation) {
+                            timings = timings.copy(translateGemmaMs = aiMs)
+                            publishTimings(timings)
+                            overlays.canvas.updateTimings(timings)
+                            val pageId = rememberPage(upgraded)
+                            send(Event.UpgradeReady(generation, pageId))
+                        }
+                    }
+                }
+            } catch (t: Throwable) {
+                Log.w(TAG, "Progressive AI upgrade failed", t)
+            }
+        }
     }
 
     private fun showCurrent(pageId: Long, crossfade: Boolean = false) {

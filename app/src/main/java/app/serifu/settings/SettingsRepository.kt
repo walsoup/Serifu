@@ -55,8 +55,4 @@ class SettingsRepository(
     }
 }
 
-fun sourceLabel(language: SourceLanguage): String = when (language) {
-    SourceLanguage.JA -> "Japanese"
-    SourceLanguage.ZH -> "Chinese"
-    SourceLanguage.KO -> "Korean"
-}
+fun sourceLabel(language: SourceLanguage): String = language.englishName

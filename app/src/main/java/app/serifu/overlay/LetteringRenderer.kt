@@ -144,7 +144,67 @@ class LetteringRenderer(context: Context) {
         frameW: Int,
         frameH: Int,
     ): RenderBubble {
-        return tag(cluster, text, settings, frameW, frameH, seamless = false)
+        val paint = TextPaint(TextPaint.ANTI_ALIAS_FLAG).apply {
+            isSubpixelText = true
+            color = Tuning.PAPER_ARGB
+            typeface = OverlayTypefaces.sfx(appContext)
+        }
+        val minSp = Tuning.SFX_MIN_SP
+        val maxSp = Tuning.SFX_MAX_SP
+        val area = cluster.letteringRect.toRectF()
+        val union = cluster.unionRect.toRectF()
+        val padX = dp(Tuning.TAG_PAD_HORIZONTAL_DP)
+        val padY = dp(Tuning.TAG_PAD_VERTICAL_DP)
+        val maxW = (area.width() - padX * 2f).coerceAtLeast(1f)
+        val maxH = (area.height() - padY * 2f).coerceAtLeast(1f)
+        val floor = sp(minOf(minSp, Tuning.ABSOLUTE_MIN_FONT_SP))
+        var size = sp(maxSp)
+        paint.textSize = size
+        var fitted = layout(text, paint, maxW)
+        while (!(fitted.height <= maxH && !midWordBreak(fitted)) && size > floor) {
+            size = (size - 0.5f).coerceAtLeast(floor)
+            paint.textSize = size
+            fitted = layout(text, paint, maxW)
+        }
+        var lineMax = 0f
+        for (line in 0 until fitted.lineCount) lineMax = maxOf(lineMax, fitted.getLineWidth(line))
+        val tagW = (lineMax + padX * 2f).coerceAtMost(area.width())
+        val tagH = (fitted.height + padY * 2f).coerceAtMost(area.height())
+        val left = (union.centerX() - tagW / 2f).coerceIn(area.left, (area.right - tagW).coerceAtLeast(area.left))
+        val top = (union.centerY() - tagH / 2f).coerceIn(area.top, (area.bottom - tagH).coerceAtLeast(area.top))
+        val box = RectF(left, top, left + tagW, top + tagH)
+
+        val isCover = settings.sfxMode == SfxMode.COVER
+        val fillColor = if (isCover) {
+            val slop = maxOf(dp(4f), cluster.charSizePx * 0.35f)
+            val source = RectF(union)
+            source.inset(-slop, -slop)
+            box.union(source)
+            withAlpha(Tuning.INK_ARGB, 255)
+        } else {
+            // COMPACT: Transparent background so comic artwork underneath remains visible
+            0
+        }
+
+        val origin = PointF(
+            box.centerX() - fitted.width / 2f,
+            box.centerY() - fitted.height / 2f,
+        )
+        val rotation = cluster.angleDeg.coerceIn(-Tuning.SFX_ANGLE_CLAMP_DEG, Tuning.SFX_ANGLE_CLAMP_DEG)
+        return RenderBubble(
+            id = cluster.id,
+            kind = cluster.kind,
+            patch = box,
+            patchCornerPx = dp(Tuning.TAG_CORNER_DP),
+            fillColor = fillColor,
+            textColor = Tuning.PAPER_ARGB,
+            layout = fitted,
+            layoutOrigin = origin,
+            rotationDeg = rotation,
+            seamless = false,
+            outlineColor = 0,
+            sourceTextForDebug = cluster.sourceText,
+        )
     }
 
     private fun tag(
@@ -192,25 +252,29 @@ class LetteringRenderer(context: Context) {
         val left = (union.centerX() - tagW / 2f).coerceIn(area.left, (area.right - tagW).coerceAtLeast(area.left))
         val top = (union.centerY() - tagH / 2f).coerceIn(area.top, (area.bottom - tagH).coerceAtLeast(area.top))
         val box = RectF(left, top, left + tagW, top + tagH)
-        // The plate has to hide the source ink, which can be larger than the
-        // translation and sits a little outside the OCR box once it is rotated.
-        val slop = maxOf(dp(4f), cluster.charSizePx * 0.35f)
-        val source = RectF(union)
-        source.inset(-slop, -slop)
-        box.union(source)
+        val isCover = settings.sfxMode == SfxMode.COVER
+        val fillColor = if (isCover) {
+            val slop = maxOf(dp(4f), cluster.charSizePx * 0.35f)
+            val source = RectF(union)
+            source.inset(-slop, -slop)
+            box.union(source)
+            withAlpha(Tuning.INK_ARGB, 255)
+        } else {
+            // COMPACT: Transparent background so comic artwork underneath remains visible
+            0
+        }
         // The layout is maxW wide with centred lines, so centre it on the plate.
         val origin = PointF(
             box.centerX() - fitted.width / 2f,
             box.centerY() - fitted.height / 2f,
         )
         val rotation = cluster.angleDeg.coerceIn(-Tuning.SFX_ANGLE_CLAMP_DEG, Tuning.SFX_ANGLE_CLAMP_DEG)
-        val fillAlpha = 255
         return RenderBubble(
             id = cluster.id,
             kind = cluster.kind,
             patch = box,
             patchCornerPx = dp(Tuning.TAG_CORNER_DP),
-            fillColor = withAlpha(Tuning.INK_ARGB, fillAlpha),
+            fillColor = fillColor,
             textColor = Tuning.PAPER_ARGB,
             layout = fitted,
             layoutOrigin = origin,

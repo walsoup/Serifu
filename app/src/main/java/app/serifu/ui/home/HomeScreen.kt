@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -35,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.serifu.R
 import app.serifu.SerifuApp
+import app.serifu.core.model.QualityMode
 import app.serifu.core.model.SourceLanguage
 import app.serifu.core.model.TriggerMode
 import app.serifu.ui.design.ActionButton
@@ -128,18 +131,24 @@ fun HomeScreen(viewModel: HomeViewModel, onNavigate: (String) -> Unit) {
             Spacer(Modifier.height(24.dp))
 
             SectionLabel(stringResource(R.string.script_label))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 SourceLanguage.entries.forEach { lang ->
                     ScriptCell(
                         glyph = when (lang) {
                             SourceLanguage.JA -> "\u3042"
                             SourceLanguage.ZH -> "\u4E2D"
                             SourceLanguage.KO -> "\uD55C"
+                            else -> lang.seal
                         },
                         name = lang.englishName,
                         selected = settings.sourceLanguage == lang,
                         onClick = { viewModel.update { it.copy(sourceLanguage = lang) } },
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.width(96.dp),
                     )
                 }
             }
@@ -205,9 +214,14 @@ fun HomeScreen(viewModel: HomeViewModel, onNavigate: (String) -> Unit) {
                 mono = true,
                 onClick = { onNavigate(Routes.Behaviour) },
             )
+            val engineValue = when (settings.quality) {
+                QualityMode.FAST -> stringResource(R.string.quality_fast)
+                QualityMode.BEST_PROGRESSIVE -> stringResource(R.string.quality_progressive)
+                QualityMode.BEST_ONLY -> stringResource(R.string.quality_best)
+            }
             SettingLine(
                 label = stringResource(R.string.engine_label),
-                value = stringResource(R.string.engine_value),
+                value = engineValue,
                 onClick = { onNavigate(Routes.Engine) },
             )
             SettingLine(

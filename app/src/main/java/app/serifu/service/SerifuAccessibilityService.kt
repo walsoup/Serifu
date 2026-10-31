@@ -23,8 +23,10 @@ import app.serifu.coordinator.TranslationCoordinator
 import app.serifu.core.coordinator.Event
 import app.serifu.ml.MlKitTranslationEngine
 import app.serifu.ml.OcrEngine
+import app.serifu.ml.RemoteAiTranslationEngine
 import app.serifu.overlay.LetteringRenderer
 import app.serifu.overlay.OverlayManager
+import app.serifu.settings.Settings as SerifuSettings
 import app.serifu.ui.MainActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -70,13 +72,16 @@ class SerifuAccessibilityService : AccessibilityService() {
             // mobile data; only an explicit opt-in should wait for Wi-Fi.
             wifiOnly = { app.settingsRepository.settings.value?.wifiOnlyDownloads == true },
         )
+        val remoteAi = RemoteAiTranslationEngine(
+            settingsProvider = { app.settingsRepository.settings.value ?: SerifuSettings() },
+        )
         val reading = TranslationCoordinator(
             scope = scope,
             context = this,
             overlays = overlays,
             capturer = capturer,
             ocr = ocr,
-            pipeline = PagePipeline(this, translator, LetteringRenderer(this), ocr),
+            pipeline = PagePipeline(this, translator, LetteringRenderer(this), ocr, remoteAi = remoteAi),
             presence = { app.readerPresence.value },
             writeSettings = { transform ->
                 scope.launch { app.settingsRepository.update(transform) }

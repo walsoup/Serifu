@@ -98,4 +98,113 @@ class LetteringRendererTest {
         assertFalse(bubble.layout.text.toString().contains('\u00ad'))
         assertTrue(bubble.patch.left <= union.left && bubble.patch.right >= union.right)
     }
+
+    @Test
+    fun sfxCompactHasTransparentFillAndCoverHasOpaqueFill() {
+        val context = RuntimeEnvironment.getApplication()
+        val union = IntRect(200, 300, 260, 400)
+        val cluster = SpeechBubbleCluster(
+            id = 2,
+            kind = BubbleKind.SFX,
+            sourceText = "ドン",
+            cacheKey = "ja|ドン",
+            orientation = Orientation.VERTICAL,
+            unionRect = union,
+            patchRect = union.expand(8),
+            letteringRect = union.expand(16),
+            fillColor = InkPaper.INK,
+            textColor = InkPaper.PAPER,
+            charSizePx = 50f,
+            angleDeg = 10f,
+            members = emptyList(),
+        )
+
+        // 1. Compact mode -> transparent fill (fillColor = 0)
+        val compactPage = LetteringRenderer(context).build(
+            clusters = listOf(cluster),
+            translations = mapOf(2 to "THUD"),
+            settings = Settings(sfxMode = app.serifu.core.model.SfxMode.COMPACT),
+            frameW = 1080,
+            frameH = 1920,
+            rotation = 0,
+            debugLines = emptyList(),
+        )
+        val compactBubble = compactPage.bubbles.single()
+        org.junit.Assert.assertEquals(0, compactBubble.fillColor)
+        org.junit.Assert.assertEquals("THUD", compactBubble.layout.text.toString())
+
+        // 2. Cover mode -> opaque fill (fillColor != 0)
+        val coverPage = LetteringRenderer(context).build(
+            clusters = listOf(cluster),
+            translations = mapOf(2 to "THUD"),
+            settings = Settings(sfxMode = app.serifu.core.model.SfxMode.COVER),
+            frameW = 1080,
+            frameH = 1920,
+            rotation = 0,
+            debugLines = emptyList(),
+        )
+        val coverBubble = coverPage.bubbles.single()
+        org.junit.Assert.assertNotEquals(0, coverBubble.fillColor)
+
+        // 3. Off mode -> omitted completely
+        val offPage = LetteringRenderer(context).build(
+            clusters = listOf(cluster),
+            translations = mapOf(2 to "THUD"),
+            settings = Settings(sfxMode = app.serifu.core.model.SfxMode.OFF),
+            frameW = 1080,
+            frameH = 1920,
+            rotation = 0,
+            debugLines = emptyList(),
+        )
+        assertTrue(offPage.bubbles.isEmpty())
+    }
+
+    @Test
+    fun freeTextCompactHasTransparentFillAndCoverHasOpaqueFill() {
+        val context = RuntimeEnvironment.getApplication()
+        val union = IntRect(200, 300, 260, 400)
+        val cluster = SpeechBubbleCluster(
+            id = 3,
+            kind = BubbleKind.FREE_TEXT,
+            sourceText = "ジャバー",
+            cacheKey = "ja|ジャバー",
+            orientation = Orientation.HORIZONTAL,
+            unionRect = union,
+            patchRect = union.expand(8),
+            letteringRect = union.expand(16),
+            fillColor = InkPaper.PAPER,
+            textColor = InkPaper.INK,
+            charSizePx = 50f,
+            angleDeg = 0f,
+            members = emptyList(),
+        )
+
+        // 1. Compact mode -> transparent fill (fillColor = 0)
+        val compactPage = LetteringRenderer(context).build(
+            clusters = listOf(cluster),
+            translations = mapOf(3 to "SPLASH"),
+            settings = Settings(sfxMode = app.serifu.core.model.SfxMode.COMPACT),
+            frameW = 1080,
+            frameH = 1920,
+            rotation = 0,
+            debugLines = emptyList(),
+        )
+        val compactBubble = compactPage.bubbles.single()
+        org.junit.Assert.assertEquals(0, compactBubble.fillColor)
+        org.junit.Assert.assertEquals("SPLASH", compactBubble.layout.text.toString())
+
+        // 2. Cover mode -> opaque fill (fillColor != 0)
+        val coverPage = LetteringRenderer(context).build(
+            clusters = listOf(cluster),
+            translations = mapOf(3 to "SPLASH"),
+            settings = Settings(sfxMode = app.serifu.core.model.SfxMode.COVER),
+            frameW = 1080,
+            frameH = 1920,
+            rotation = 0,
+            debugLines = emptyList(),
+        )
+        val coverBubble = coverPage.bubbles.single()
+        org.junit.Assert.assertNotEquals(0, coverBubble.fillColor)
+    }
 }
+

@@ -36,6 +36,9 @@ class SettingsCodecTest {
             debugOverlay = true,
             dynamicColor = true,
             onboardingDone = true,
+            aiApiKey = "test-api-key-12345",
+            aiModel = "gemini-1.5-flash",
+            aiEndpoint = "https://custom.endpoint.com/v1",
         )
         val prefs = mutablePreferencesOf()
         original.writeTo(prefs)

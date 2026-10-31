@@ -12,11 +12,13 @@ import app.serifu.core.translate.PageTranslationRequest
 import app.serifu.core.vision.ClusterConfig
 import app.serifu.core.vision.ClusterOutcome
 import app.serifu.core.vision.OcrLine
+import app.serifu.core.vision.SpeechBubbleCluster
 import app.serifu.core.vision.SpeechBubbleClusterer
 import app.serifu.core.vision.VisionInputs
 import app.serifu.ml.MlKitTranslationEngine
 import app.serifu.ml.OcrEngine
 import app.serifu.ml.VerticalRetiler
+import app.serifu.ml.RemoteAiTranslationEngine
 import app.serifu.overlay.LetteringRenderer
 import app.serifu.overlay.RenderPage
 import app.serifu.settings.Settings
@@ -28,6 +30,7 @@ class PagePipeline(
     private val renderer: LetteringRenderer,
     private val ocr: OcrEngine,
     private val retiler: VerticalRetiler = VerticalRetiler(),
+    private val remoteAi: RemoteAiTranslationEngine? = null,
 ) {
     private val metrics = context.applicationContext.resources.displayMetrics
 
@@ -38,7 +41,39 @@ class PagePipeline(
         val translateGemmaMs: Long,
         val layoutMs: Long,
         val outcome: ClusterOutcome?,
+        val request: PageTranslationRequest? = null,
+        val clusters: List<SpeechBubbleCluster> = emptyList(),
+        val retiled: List<OcrLine> = emptyList(),
     )
+
+    fun hasAiConfigured(settings: Settings): Boolean =
+        remoteAi != null && remoteAi.isConfigured(settings)
+
+    suspend fun translateWithAi(
+        request: PageTranslationRequest,
+        clusters: List<SpeechBubbleCluster>,
+        frameW: Int,
+        frameH: Int,
+        rotation: Int,
+        retiled: List<OcrLine>,
+        outcome: ClusterOutcome,
+        settings: Settings,
+    ): RenderPage? {
+        val ai = remoteAi ?: return null
+        val result = ai.translatePage(request)
+        return renderer.build(
+            clusters = clusters,
+            translations = result.byId,
+            settings = settings,
+            frameW = frameW,
+            frameH = frameH,
+            rotation = rotation,
+            debugLines = retiled,
+            debugClusters = clusters,
+            debugWalls = outcome.inkWalls,
+            debugDropped = outcome.droppedFurigana,
+        )
+    }
 
     suspend fun letter(
         lines: List<OcrLine>,
@@ -57,7 +92,7 @@ class PagePipeline(
             frameWidth = frameWidth,
             frameHeight = frameHeight,
             patchPadPx = dp(Tuning.PATCH_PAD_DP),
-            skipLatin = settings.skipLatinText,
+            skipLatin = settings.skipLatinText && settings.sourceLanguage.isCjk,
             pill = pill,
         )
         val vision = VisionInputs(
@@ -94,7 +129,31 @@ class PagePipeline(
             previousPageLines = previousLines.take(Tuning.PREVIOUS_PAGE_CONTEXT_LINES),
             keepHonorifics = settings.keepHonorifics,
         )
-        val translated = translator.translatePage(request)
+
+        val useAiOnly = settings.quality == app.serifu.core.model.QualityMode.BEST_ONLY && hasAiConfigured(settings)
+        var translateMlKitMs = 0L
+        var translateAiMs = 0L
+
+        val translated = if (useAiOnly) {
+            val aiStart = now()
+            try {
+                val res = remoteAi!!.translatePage(request)
+                translateAiMs = now() - aiStart
+                res
+            } catch (t: Throwable) {
+                android.util.Log.w("Serifu", "Remote AI translation failed in BEST_ONLY, falling back to ML Kit", t)
+                val mlStart = now()
+                val res = translator.translatePage(request)
+                translateMlKitMs = now() - mlStart
+                res
+            }
+        } else {
+            val mlStart = now()
+            val res = translator.translatePage(request)
+            translateMlKitMs = now() - mlStart
+            res
+        }
+
         val translatedAt = now()
         val page = renderer.build(
             clusters = clusters,
@@ -112,10 +171,13 @@ class PagePipeline(
         return Lettering(
             page = page.takeIf { it.bubbles.isNotEmpty() },
             clusterMs = clustered - clusterStarted,
-            translateMs = translatedAt - clustered,
-            translateGemmaMs = 0L,
+            translateMs = translateMlKitMs,
+            translateGemmaMs = translateAiMs,
             layoutMs = laidOut - translatedAt,
             outcome = outcome,
+            request = request,
+            clusters = clusters,
+            retiled = retiled,
         )
     }
 

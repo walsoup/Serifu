@@ -138,6 +138,7 @@ class FloatingControlPillView(context: Context) : View(context) {
     fun render(glyph: String, phase: PillPhase, description: String, idleAlpha: Float) {
         val phaseChanged = this.phase != phase
         this.glyph = glyph
+        glyphPaint.textSize = sp(if (glyph.length > 1) 11.5f else 14f)
         this.phase = phase
         this.idleAlpha = idleAlpha
         contentDescription = description

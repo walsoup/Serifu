@@ -45,7 +45,7 @@ object Tuning {
     const val OCR_LONG_SIDE_MAX_PX = 2400
     const val LINE_MIN_SIZE_REF_UNITS = 10f
     const val LINE_MIN_CONFIDENCE = 0.35f
-    const val ROTATED_ANGLE_DEG = 20f
+    const val ROTATED_ANGLE_DEG = 8f
     const val VERTICAL_ASPECT = 1.35f
     const val VERTICAL_RETILE_CONFIDENCE = 0.6f
     const val VERTICAL_RETILE_COUNT_MISMATCH = 0.4f
@@ -139,6 +139,7 @@ object Tuning {
      * Four seconds returns the source line, which then looks like a translation.
      */
     const val MLKIT_TRANSLATE_COLD_TIMEOUT_MS = 90_000L
+    const val AI_REMOTE_TIMEOUT_MS = 12_000L
     const val EMPTY_PAGE_RETRY_WINDOW_MS = 3_000L
     const val EMPTY_PAGE_RETRY_MAX = 2
     const val EMPTY_PAGE_RETRY_FIRST_MS = 800L
@@ -179,6 +180,7 @@ object Tuning {
     const val SFX_MIN_SP = 11
     const val SFX_MAX_SP = 14
     const val SFX_ANGLE_CLAMP_DEG = 12f
+    const val SFX_OUTLINE_STROKE_DP = 3.5f
     const val SHOW_FADE_MS = 90
     const val UPGRADE_CROSSFADE_MS = 150
     const val PEEK_HIDE_MS = 80

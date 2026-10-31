@@ -58,13 +58,21 @@ class HudView(context: Context) : LinearLayout(context) {
     fun render(model: HudModel) {
         removeAllViews()
         val gap = dp(8)
-        addView(row(gap).apply {
+        val langScroll = android.widget.HorizontalScrollView(context).apply {
+            isHorizontalScrollBarEnabled = false
+            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+        }
+        val langRow = LinearLayout(context).apply {
+            orientation = HORIZONTAL
+            layoutParams = LayoutParams(LayoutParams.WRAP_CONTENT, dp(Tuning.HUD_ROW_HEIGHT_DP))
             SourceLanguage.entries.forEach { language ->
-                addView(segment(language.nativeName, language == model.source, letterSpace = false) {
+                addView(segment(language.nativeName, language == model.source, letterSpace = false, minWidthPx = dp(60)) {
                     host?.onSource(language)
                 })
             }
-        })
+        }
+        langScroll.addView(langRow)
+        addView(langScroll)
         addView(spacer(gap))
         addView(row(gap).apply {
             addView(segment("AUTO", model.mode == TriggerMode.AUTO, letterSpace = true) { host?.onMode(TriggerMode.AUTO) })
@@ -141,21 +149,30 @@ class HudView(context: Context) : LinearLayout(context) {
         layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, gap)
     }
 
-    private fun segment(label: String, selected: Boolean, letterSpace: Boolean, onClick: () -> Unit): TextView =
-        TextView(context).apply {
-            text = label
-            gravity = Gravity.CENTER
-            textSize = 12f
-            maxLines = 1
-            setTextColor(if (selected) InkPaper.ON_HANKO else InkPaper.INK)
-            setBackgroundColor(if (selected) InkPaper.HANKO else InkPaper.TRANSPARENT)
-            if (letterSpace) letterSpacing = 0.04f
-            setOnClickListener { onClick() }
-            layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 1f).apply {
-                marginEnd = dp(4)
-            }
-            contentDescription = label
+    private fun segment(
+        label: String,
+        selected: Boolean,
+        letterSpace: Boolean,
+        minWidthPx: Int = 0,
+        onClick: () -> Unit,
+    ): TextView = TextView(context).apply {
+        text = label
+        gravity = Gravity.CENTER
+        textSize = 12f
+        maxLines = 1
+        setPadding(dp(8), 0, dp(8), 0)
+        setTextColor(if (selected) InkPaper.ON_HANKO else InkPaper.INK)
+        setBackgroundColor(if (selected) InkPaper.HANKO else InkPaper.TRANSPARENT)
+        if (letterSpace) letterSpacing = 0.04f
+        setOnClickListener { onClick() }
+        val width = if (minWidthPx > 0) LayoutParams.WRAP_CONTENT else 0
+        val weight = if (minWidthPx > 0) 0f else 1f
+        layoutParams = LayoutParams(width, LayoutParams.MATCH_PARENT, weight).apply {
+            marginEnd = dp(4)
         }
+        if (minWidthPx > 0) minimumWidth = minWidthPx
+        contentDescription = label
+    }
 
     private fun peekSegment(): TextView = TextView(context).apply {
         text = "Peek"

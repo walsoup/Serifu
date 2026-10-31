@@ -149,6 +149,7 @@ class TranslationCanvasView(context: Context) : View(context) {
         canvas.save()
         canvas.translate(-originX.toFloat(), -originY.toFloat())
         for (bubble in drawn.bubbles) {
+            if (bubble.fillColor == 0) continue
             canvas.save()
             if (bubble.rotationDeg != 0f) {
                 canvas.rotate(bubble.rotationDeg, bubble.patch.centerX(), bubble.patch.centerY())
@@ -196,14 +197,48 @@ class TranslationCanvasView(context: Context) : View(context) {
             if (bubble.rotationDeg != 0f) {
                 canvas.rotate(bubble.rotationDeg, bubble.patch.centerX(), bubble.patch.centerY())
             }
-            // Lettering never leaves the box it was detected in.
-            canvas.clipRect(bubble.patch)
+            if (bubble.kind != app.serifu.core.model.BubbleKind.SFX && bubble.fillColor != 0) {
+                // Lettering never leaves the box it was detected in.
+                canvas.clipRect(bubble.patch)
+            }
             canvas.translate(bubble.layoutOrigin.x, bubble.layoutOrigin.y)
-            bubble.layout.draw(canvas)
+            if (bubble.kind == app.serifu.core.model.BubbleKind.SFX || bubble.fillColor == 0) {
+                drawOutlinedLayout(canvas, bubble.layout, density)
+            } else {
+                bubble.layout.draw(canvas)
+            }
             canvas.restore()
         }
         canvas.restore()
         if (debug) painter.draw(canvas, drawn, originX, originY, density, timings)
+    }
+
+    private fun drawOutlinedLayout(canvas: Canvas, layout: android.text.StaticLayout, density: Float) {
+        val paint = layout.paint
+        val origStyle = paint.style
+        val origColor = paint.color
+        val origStrokeWidth = paint.strokeWidth
+        val origStrokeJoin = paint.strokeJoin
+        val origStrokeCap = paint.strokeCap
+
+        val strokeWidthPx = Tuning.SFX_OUTLINE_STROKE_DP * density
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = strokeWidthPx
+        paint.strokeJoin = Paint.Join.ROUND
+        paint.strokeCap = Paint.Cap.ROUND
+        paint.color = Tuning.INK_ARGB
+
+        layout.draw(canvas)
+
+        paint.style = Paint.Style.FILL
+        paint.color = Tuning.PAPER_ARGB
+        layout.draw(canvas)
+
+        paint.style = origStyle
+        paint.color = origColor
+        paint.strokeWidth = origStrokeWidth
+        paint.strokeJoin = origStrokeJoin
+        paint.strokeCap = origStrokeCap
     }
 
     override fun onInitializeAccessibilityNodeInfo(info: AccessibilityNodeInfo) {

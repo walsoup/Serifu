@@ -33,6 +33,7 @@ fun SamplePage(
             SourceLanguage.JA -> "sample/sample_ja.png"
             SourceLanguage.KO -> "sample/sample_ko.png"
             SourceLanguage.ZH -> "sample/sample_zh.png"
+            else -> "sample/sample_ja.png"
         }
         runCatching {
             context.assets.open(assetName).use { stream ->

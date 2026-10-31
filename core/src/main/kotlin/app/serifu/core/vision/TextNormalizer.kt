@@ -11,10 +11,10 @@ object TextNormalizer {
 
     fun normalize(text: String, source: SourceLanguage): String {
         val composed = Normalizer.normalize(text, Normalizer.Form.NFKC)
-        val spaced = if (source == SourceLanguage.KO) {
-            composed.replace(koreanBreaks, " ").replace(koreanSpaces, " ").trim()
-        } else {
+        val spaced = if (source == SourceLanguage.JA || source == SourceLanguage.ZH) {
             composed.replace(whitespace, "")
+        } else {
+            composed.replace(koreanBreaks, " ").replace(whitespace, " ").trim()
         }
         return spaced.replace(ellipsisRun, "…")
     }

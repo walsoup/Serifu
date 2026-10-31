@@ -31,6 +31,12 @@ object LanguageModelManager {
         LanguagePack(TranslateLanguage.JAPANESE, "Japanese", "日本語", isSource = true),
         LanguagePack(TranslateLanguage.KOREAN, "Korean", "한국어", isSource = true),
         LanguagePack(TranslateLanguage.CHINESE, "Chinese", "中文", isSource = true),
+        LanguagePack(TranslateLanguage.FRENCH, "French", "Français", isSource = true),
+        LanguagePack(TranslateLanguage.SPANISH, "Spanish", "Español", isSource = true),
+        LanguagePack(TranslateLanguage.GERMAN, "German", "Deutsch", isSource = true),
+        LanguagePack(TranslateLanguage.ITALIAN, "Italian", "Italiano", isSource = true),
+        LanguagePack(TranslateLanguage.PORTUGUESE, "Portuguese", "Português", isSource = true),
+        LanguagePack(TranslateLanguage.ENGLISH, "English", "English", isSource = true),
     )
 
     val POPULAR_TARGET_PACKS = listOf(
@@ -46,7 +52,7 @@ object LanguageModelManager {
         LanguagePack(TranslateLanguage.THAI, "Thai", "ไทย", isSource = false),
     )
 
-    val ALL_PACKS = SOURCE_PACKS + POPULAR_TARGET_PACKS
+    val ALL_PACKS = (SOURCE_PACKS + POPULAR_TARGET_PACKS).distinctBy { it.code }
 
     private val _downloadedCodes = MutableStateFlow<Set<String>>(emptySet())
     val downloadedCodes: StateFlow<Set<String>> = _downloadedCodes.asStateFlow()

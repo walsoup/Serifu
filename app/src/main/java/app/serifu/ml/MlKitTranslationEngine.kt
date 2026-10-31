@@ -166,7 +166,9 @@ class MlKitTranslationEngine(
             SourceLanguage.JA -> "Katakana-Latin; Hiragana-Latin"
             SourceLanguage.KO -> "Hangul-Latin"
             SourceLanguage.ZH -> "Han-Latin"
+            else -> null
         }
+        if (id == null) return text.uppercase(Locale.ENGLISH)
         val latin = try {
             Transliterator.getInstance(id).transliterate(text)
         } catch (_: IllegalArgumentException) {
@@ -175,11 +177,8 @@ class MlKitTranslationEngine(
         return latin.uppercase(Locale.ENGLISH)
     }
 
-    private fun languageCode(source: SourceLanguage): String = when (source) {
-        SourceLanguage.JA -> TranslateLanguage.JAPANESE
-        SourceLanguage.ZH -> TranslateLanguage.CHINESE
-        SourceLanguage.KO -> TranslateLanguage.KOREAN
-    }
+    private fun languageCode(source: SourceLanguage): String =
+        TranslateLanguage.fromLanguageTag(source.tag) ?: TranslateLanguage.ENGLISH
 
     private fun targetCode(tag: String): String =
         TranslateLanguage.fromLanguageTag(tag) ?: TranslateLanguage.ENGLISH

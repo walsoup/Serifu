@@ -309,5 +309,6 @@ private fun chapterTitle(language: SourceLanguage): String = stringResource(
         SourceLanguage.JA -> R.string.sample_chapter_ja
         SourceLanguage.KO -> R.string.sample_chapter_ko
         SourceLanguage.ZH -> R.string.sample_chapter_zh
+        else -> R.string.sample_chapter_ja
     },
 )

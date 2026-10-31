@@ -150,7 +150,9 @@ fun LanguagesScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
 
         SectionTitle(stringResource(R.string.source_label))
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             SourceLanguage.entries.forEach { lang ->
@@ -158,7 +160,6 @@ fun LanguagesScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
                     text = lang.englishName,
                     selected = settings.sourceLanguage == lang,
                     onClick = { viewModel.update { it.copy(sourceLanguage = lang) } },
-                    modifier = Modifier.weight(1f),
                 )
             }
         }
@@ -566,7 +567,8 @@ fun BehaviourScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
 }
 
 @Composable
-fun EngineScreen(onBack: () -> Unit) {
+fun EngineScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
+    val settings by viewModel.settings.collectAsStateWithLifecycle()
     val c = Serifu.colors
     val downloaded by LanguageModelManager.downloadedCodes.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { LanguageModelManager.refreshDownloaded() }
@@ -587,6 +589,60 @@ fun EngineScreen(onBack: () -> Unit) {
             style = Serifu.type.bodySecondary,
             color = c.textSecondary,
         )
+
+        SectionTitle(stringResource(R.string.quality_label))
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Pill(
+                text = stringResource(R.string.quality_fast),
+                selected = settings.quality == app.serifu.core.model.QualityMode.FAST,
+                onClick = { viewModel.update { it.copy(quality = app.serifu.core.model.QualityMode.FAST) } },
+            )
+            Pill(
+                text = stringResource(R.string.quality_progressive),
+                selected = settings.quality == app.serifu.core.model.QualityMode.BEST_PROGRESSIVE,
+                onClick = { viewModel.update { it.copy(quality = app.serifu.core.model.QualityMode.BEST_PROGRESSIVE) } },
+            )
+            Pill(
+                text = stringResource(R.string.quality_best),
+                selected = settings.quality == app.serifu.core.model.QualityMode.BEST_ONLY,
+                onClick = { viewModel.update { it.copy(quality = app.serifu.core.model.QualityMode.BEST_ONLY) } },
+            )
+        }
+
+        SectionTitle(stringResource(R.string.engine_ai_title))
+        Text(
+            text = stringResource(R.string.engine_ai_body),
+            style = Serifu.type.bodySecondary,
+            color = c.textSecondary,
+        )
+        Spacer(Modifier.height(10.dp))
+        GroupLabel(stringResource(R.string.ai_api_key_label))
+        Spacer(Modifier.height(4.dp))
+        SerifuTextField(
+            value = settings.aiApiKey,
+            onValueChange = { key -> viewModel.update { it.copy(aiApiKey = key) } },
+            placeholder = stringResource(R.string.ai_api_key_placeholder),
+        )
+        Spacer(Modifier.height(10.dp))
+        GroupLabel(stringResource(R.string.ai_model_label))
+        Spacer(Modifier.height(4.dp))
+        SerifuTextField(
+            value = settings.aiModel,
+            onValueChange = { model -> viewModel.update { it.copy(aiModel = model) } },
+            placeholder = stringResource(R.string.ai_model_placeholder),
+        )
+        Spacer(Modifier.height(10.dp))
+        GroupLabel(stringResource(R.string.ai_endpoint_label))
+        Spacer(Modifier.height(4.dp))
+        SerifuTextField(
+            value = settings.aiEndpoint,
+            onValueChange = { ep -> viewModel.update { it.copy(aiEndpoint = ep) } },
+            placeholder = stringResource(R.string.ai_endpoint_placeholder),
+        )
+
         SectionTitle(stringResource(R.string.engine_mlkit))
         packs.forEachIndexed { index, pack ->
             SettingLine(

@@ -14,3 +14,4 @@ captures/
 # Release signing. The keystore and .env never belong in git.
 .env
 signing/
+screens/

@@ -122,6 +122,7 @@ dependencies {
     implementation(libs.mlkit.ocr.ja)
     implementation(libs.mlkit.ocr.zh)
     implementation(libs.mlkit.ocr.ko)
+    implementation(libs.mlkit.ocr.latin)
     implementation(libs.mlkit.translate)
 
     testImplementation(libs.junit)
