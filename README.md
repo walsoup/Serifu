@@ -4,7 +4,7 @@
 
 # Serifu
 
-Serifu translates manga, manhua, and manhwa on an Android phone. It screenshots a reader you choose, finds the bubbles, and draws English over them. CJK and Latin scripts (Japanese, Chinese, Korean, French, Spanish, German, Italian, Portuguese, Russian) are supported. Offline translation is handled by ML Kit on the device, with an optional OpenAI-compatible cloud backend for LLM translation. The language pack is a one-time download of about 30 MB.
+Serifu translates manga, manhua, and manhwa on an Android phone. It screenshots a reader you choose, finds the bubbles, and draws English over them. Japanese, Chinese, and Korean are supported, along with Latin-script sources (English, French, Spanish, German, Italian, Portuguese). Translation runs on the device with ML Kit, or through an optional OpenAI-compatible cloud backend. The language pack is a one-time download of about 30 MB.
 
 This tree is version 0.6.5-beta, with `applicationId` `app.walsoup.serifu` and `minSdk` 30.
 
@@ -28,9 +28,11 @@ The rest of the settings sit on the home screen, under the trigger.
 | Lettering | Font, size range, sound effects (compact, cover, or off). A fresh install uses 9–22 sp. |
 | Reader apps | Packages Serifu is allowed to screenshot |
 | Behaviour | How long Auto waits after the last scroll (default 450 ms), plus honorifics and the pill |
-| Engine | ML Kit offline or OpenAI-compatible cloud backend (Fast, Progressive, Best only) |
-| Debug | Region outlines |
+| Engine | On-device ML Kit or an OpenAI-compatible API endpoint (Fast, Progressive, Best only) |
+| Debug | Region outlines and the reasoning level sent to the API engine |
 | About | Version and the OFL font licences |
+
+<img src="docs/engine.png" width="360" alt="Engine settings, on-device or API">
 
 <img src="docs/about.png" width="360" alt="About, version 0.6.5-beta, with the app icon beside the name">
 
@@ -44,7 +46,7 @@ Over a chosen reader, a tactile pill sits on the screen edge. A tap translates t
   <img src="docs/translated.png" width="340" alt="Translated comic page with knockout SFX and lettering">
 </p>
 
-## Interfaces
+## How it works
 
 The project is split into three Gradle modules. `:core` is plain Kotlin and has no Android imports. `:app` is the phone. `:linen` is the design system the screens are built on. Serifu paints with its own palette: paper `#F3EEE3`, ink `#16140F`, hanko `#C8322B`.
 
@@ -52,7 +54,7 @@ The project is split into three Gradle modules. `:core` is plain Kotlin and has 
 
 - `availability(source, target)` returns `Ready`, `NeedsDownload`, `Downloading`, or `Unsupported`.
 - `translatePage` takes a `PageTranslationRequest` (source language, target tag, one `BubbleText` per bubble, the previous page's lines, and whether to keep honorifics) and returns a `PageTranslationResult`, a map of bubble id to English.
-- `EngineId` is `MLKIT` or `GEMMA4_E2B`. The running translator is `MlKitTranslationEngine`. `GEMMA4_E2B` is a cache-key value. `PromptBuilder` and `LlmResponseParser` turn bubbles into a prompt and read a reply back, and both have tests beside the other `:core` tests.
+- `EngineId` is `MLKIT`, `GEMMA4_E2B`, or `AI_REMOTE`. On-device translation is `MlKitTranslationEngine`. The cloud backend is `RemoteAiTranslationEngine` in `:app`: it posts the page's bubbles to the configured endpoint and caches the replies. `GEMMA4_E2B` is a cache-key value. `PromptBuilder` and `LlmResponseParser` turn bubbles into a prompt and read a reply back, and both have tests beside the other `:core` tests.
 
 `PagePipeline` in `:app` is the page path: vertical retiling, `SpeechBubbleClusterer`, ML Kit, then `LetteringRenderer`. The accessibility service and the sample page both call it.
 
@@ -81,7 +83,7 @@ JVM, no device:
 - The reading loop and capture: `ReducerTest`, `PageCacheTest`, `ScrollEstimatorTest`, `FrameFingerprintTest`, `CaptureRetryTest`, `SelfDetectionTest`.
 - Smaller checks: `LumaMathTest`, `GeometryTest`, `OrientationTest`, `TextNormalizerTest`, `TuningTest`.
 
-`:app:testDebugUnitTest` is `LetteringRendererTest` (the patch stays inside the bubble), `EventRouterTest`, and `SettingsCodecTest`.
+`:app:testDebugUnitTest` is `LetteringRendererTest` (the patch stays inside the bubble), `RemoteAiTranslationEngineTest`, `EventRouterTest`, and `SettingsCodecTest`.
 
 On a device:
 
@@ -94,3 +96,7 @@ On a device:
 ## Build
 
 The debug build needs JDK 17. `./gradlew :app:assembleDebug` writes the debug APK.
+
+## Status
+
+Serifu is a beta. The pipeline is covered by JVM unit tests, but it has not been validated on real devices yet, so OCR and lettering may still change.
