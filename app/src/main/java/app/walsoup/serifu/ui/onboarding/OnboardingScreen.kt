@@ -11,6 +11,7 @@ import android.os.Looper
 import android.provider.Settings
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -253,7 +254,9 @@ private fun LanguagesStep(
     GroupLabel(stringResource(R.string.onboarding_source_scripts).uppercase())
     Spacer(Modifier.height(8.dp))
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         SourceLanguage.entries.forEach { lang ->
@@ -261,7 +264,6 @@ private fun LanguagesStep(
                 text = lang.englishName,
                 selected = source == lang,
                 onClick = { onSource(lang) },
-                modifier = Modifier.weight(1f),
             )
         }
     }
