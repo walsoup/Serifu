@@ -140,6 +140,13 @@ class PagePipeline(
                 val res = remoteAi!!.translatePage(request)
                 translateAiMs = now() - aiStart
                 res
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                if (cancelled !is kotlinx.coroutines.TimeoutCancellationException) throw cancelled
+                android.util.Log.w("Serifu", "Remote AI translation timed out in BEST_ONLY, falling back to ML Kit", cancelled)
+                val mlStart = now()
+                val res = translator.translatePage(request)
+                translateMlKitMs = now() - mlStart
+                res
             } catch (t: Throwable) {
                 android.util.Log.w("Serifu", "Remote AI translation failed in BEST_ONLY, falling back to ML Kit", t)
                 val mlStart = now()
