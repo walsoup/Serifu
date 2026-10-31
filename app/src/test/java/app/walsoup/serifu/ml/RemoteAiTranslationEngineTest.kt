@@ -52,8 +52,11 @@ class RemoteAiTranslationEngineTest {
         val settings = Settings(aiApiKey = "dummy-key")
         val engine = RemoteAiTranslationEngine(settingsProvider = { settings }, cache = cache)
 
-        // Seed cache
-        cache.put(cache.key(EngineId.AI_REMOTE, "en", "fr|Bonjour!"), "Hello!")
+        // Seed cache (keys carry the engine's non-secret config tag)
+        cache.put(
+            cache.key(EngineId.AI_REMOTE, "en", "${engine.cacheConfigTag(settings)}|fr|Bonjour!"),
+            "Hello!",
+        )
 
         val request = PageTranslationRequest(
             source = SourceLanguage.FR,
