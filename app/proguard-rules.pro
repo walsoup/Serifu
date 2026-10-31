@@ -15,5 +15,6 @@
 -keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod
 
 # Keep app code and data models
--keep class app.serifu.** { *; }
+-keep class app.walsoup.serifu.** { *; }
+-keep class app.serifu.core.** { *; }
 

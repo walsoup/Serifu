@@ -16,4 +16,4 @@
     android:notificationTimeout="50"
     android:description="@string/a11y_service_description"
     android:summary="@string/a11y_service_summary"
-    android:settingsActivity="app.serifu.ui.MainActivity" />
+    android:settingsActivity="app.walsoup.serifu.ui.MainActivity" />

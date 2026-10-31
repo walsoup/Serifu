@@ -30,7 +30,7 @@ object ReadingOrder {
             Orientation.VERTICAL -> columns(lines).flatMap { column -> column.sortedBy { it.box.top } }
             else -> rows(lines).flatMap { row -> row.sortedBy { it.box.left } }
         }
-        val separator = if (source == SourceLanguage.KO) " " else ""
+        val separator = if (source == SourceLanguage.JA || source == SourceLanguage.ZH) "" else " "
         return TextNormalizer.normalize(ordered.joinToString(separator) { it.text.trim() }, source)
     }
 

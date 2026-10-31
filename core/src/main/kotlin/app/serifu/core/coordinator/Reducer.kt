@@ -132,7 +132,7 @@ object Reducer {
     }
 
     private fun onPageReady(state: CoordinatorState, event: Event.PageReady): Transition {
-        if (state.phase is Phase.Processing && event.generation == state.generation) {
+        if ((state.phase is Phase.Processing || state.phase is Phase.Showing) && event.generation == state.generation) {
             return Transition(
                 state.copy(
                     phase = Phase.Showing(event.pageId),
@@ -147,7 +147,7 @@ object Reducer {
     }
 
     private fun onPageEmpty(state: CoordinatorState, event: Event.PageEmpty, now: Long): Transition {
-        if (state.phase !is Phase.Processing || event.generation != state.generation) return stay(state)
+        if ((state.phase !is Phase.Processing && state.phase !is Phase.Showing) || event.generation != state.generation) return stay(state)
         return Transition(
             state.copy(phase = Phase.Idle, captureRetries = 0, emptySinceMs = now),
             listOf(Effect.HideCanvas),

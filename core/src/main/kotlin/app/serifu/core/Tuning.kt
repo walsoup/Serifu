@@ -45,7 +45,7 @@ object Tuning {
     const val OCR_LONG_SIDE_MAX_PX = 2400
     const val LINE_MIN_SIZE_REF_UNITS = 10f
     const val LINE_MIN_CONFIDENCE = 0.35f
-    const val ROTATED_ANGLE_DEG = 20f
+    const val ROTATED_ANGLE_DEG = 8f
     const val VERTICAL_ASPECT = 1.35f
     const val VERTICAL_RETILE_CONFIDENCE = 0.6f
     const val VERTICAL_RETILE_COUNT_MISMATCH = 0.4f
@@ -78,6 +78,9 @@ object Tuning {
 
     const val LINE_GROUP_OVERLAP = 0.5f
     const val READING_BAND_FRACTION = 0.15f
+    const val BUBBLE_MERGE_LETTERING_OVERLAP = 0.35f
+    const val BUBBLE_MERGE_PATCH_OVERLAP = 0.40f
+    const val BUBBLE_MERGE_FALLBACK_OVERLAP = 0.50f
 
     const val REGION_EXPAND_CHAR_FACTOR = 3f
     const val REGION_EXPAND_UNION_FACTOR = 0.5f
@@ -119,6 +122,16 @@ object Tuning {
     const val TRANSLATOR_IDLE_MS = 600_000L
     const val PREVIOUS_PAGE_CONTEXT_LINES = 8
     const val MLKIT_PACK_APPROX_BYTES = 30L * 1024 * 1024
+    /**
+     * `downloadModelIfNeeded` waits forever when Wi-Fi is required and absent.
+     * Past this, the page would stay in the source language with no explanation.
+     */
+    const val MLKIT_DOWNLOAD_TIMEOUT_MS = 30_000L
+    /**
+     * A mask this many times the text's own box has flooded the page.
+     * A real balloon stays well under it; painting the page covers the art.
+     */
+    const val REGION_MASK_AREA_FACTOR = 12f
     /** Per-bubble cap once this language pair has completed one translation. */
     const val MLKIT_TRANSLATE_TIMEOUT_MS = 4_000L
     /**
@@ -126,6 +139,7 @@ object Tuning {
      * Four seconds returns the source line, which then looks like a translation.
      */
     const val MLKIT_TRANSLATE_COLD_TIMEOUT_MS = 90_000L
+    const val AI_REMOTE_TIMEOUT_MS = 30_000L
     const val EMPTY_PAGE_RETRY_WINDOW_MS = 3_000L
     const val EMPTY_PAGE_RETRY_MAX = 2
     const val EMPTY_PAGE_RETRY_FIRST_MS = 800L
@@ -149,7 +163,7 @@ object Tuning {
     const val BALLOON_LEADING_OPEN = 1.0f
     const val BALLOON_LEADING_STACKED = 0.92f
     const val BALLOON_LEADING_TIGHT = 0.88f
-    const val DIALOGUE_CORNER_DP = 8f
+    const val DIALOGUE_CORNER_DP = 14f
     const val CAPTION_CORNER_DP = 2f
     const val PATCH_EDGE_STROKE_DP = 1.5f
     const val PATCH_EDGE_STROKE_ALPHA = 128
@@ -166,12 +180,13 @@ object Tuning {
     const val SFX_MIN_SP = 11
     const val SFX_MAX_SP = 14
     const val SFX_ANGLE_CLAMP_DEG = 12f
+    const val SFX_OUTLINE_STROKE_DP = 3.5f
     const val SHOW_FADE_MS = 90
     const val UPGRADE_CROSSFADE_MS = 150
     const val PEEK_HIDE_MS = 80
     const val PEEK_SHOW_MS = 120
-    const val HUD_DISMISS_MS = 4_000L
-    const val HUD_WIDTH_DP = 232
+    const val HUD_DISMISS_MS = 6_000L
+    const val HUD_WIDTH_DP = 264
     const val HUD_ROW_HEIGHT_DP = 44
     const val HUD_ENTRANCE_MS = 120
     const val HUD_EXIT_MS = 80

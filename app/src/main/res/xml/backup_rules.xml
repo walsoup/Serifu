@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Keep the API credential (DataStore: serifu_settings) out of cloud backups. -->
+<full-backup-content>
+    <exclude domain="file" path="datastore/serifu_settings.preferences_pb" />
+    <exclude domain="sharedpref" path="." />
+</full-backup-content>

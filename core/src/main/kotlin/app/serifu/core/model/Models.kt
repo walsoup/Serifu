@@ -9,6 +9,15 @@ enum class SourceLanguage(
     JA("ja", "日", "日本語", "Japanese"),
     ZH("zh", "中", "中文", "Chinese"),
     KO("ko", "한", "한국어", "Korean"),
+    FR("fr", "Fr", "Français", "French"),
+    ES("es", "Es", "Español", "Spanish"),
+    DE("de", "De", "Deutsch", "German"),
+    IT("it", "It", "Italiano", "Italian"),
+    PT("pt", "Pt", "Português", "Portuguese"),
+    EN("en", "En", "English", "English");
+
+    val isCjk: Boolean get() = this == JA || this == ZH || this == KO
+    val isLatin: Boolean get() = !isCjk
 }
 
 enum class TriggerMode {
@@ -21,6 +30,14 @@ enum class QualityMode {
     FAST,
     BEST_PROGRESSIVE,
     BEST_ONLY,
+}
+
+enum class ReasoningEffort(val tag: String, val label: String) {
+    NONE("none", "None"),
+    AUTO("auto", "Auto"),
+    LOW("low", "Low"),
+    MEDIUM("medium", "Medium"),
+    HIGH("high", "High");
 }
 
 enum class BubbleKind {

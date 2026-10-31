@@ -21,19 +21,21 @@ object BubbleClassifier {
         orientation: Orientation,
     ): BubbleKind {
         if (rotated) return BubbleKind.SFX
-        if (medianCharSizePx > 0f && charSizePx > Tuning.SFX_SIZE_FACTOR * medianCharSizePx) {
-            return BubbleKind.SFX
-        }
         if (orientation == Orientation.VERTICAL) {
             // Upright tategaki is dialogue by default. Outline-adjacent OCR boxes
             // inflate the ring noise and union, so neither a high ring deviation
             // nor a missing region mask may reroute it to SFX or free text.
             return BubbleKind.DIALOGUE
         }
-        if (ringStddev >= Tuning.SFX_RING_STDDEV_MIN) return BubbleKind.SFX
-        if (mask != null && ringStddev < Tuning.DIALOGUE_RING_STDDEV_MAX) {
-            return if (mask.fillRatio() > Tuning.CAPTION_FILL_RATIO) BubbleKind.CAPTION else BubbleKind.DIALOGUE
+        // A caption rectangle is nearly solid paper. Its border makes the ring
+        // noisy and the line box taller than the dialogue, which used to send
+        // the whole caption through romanization.
+        if (mask != null && mask.fillRatio() > Tuning.CAPTION_FILL_RATIO) return BubbleKind.CAPTION
+        if (medianCharSizePx > 0f && charSizePx > Tuning.SFX_SIZE_FACTOR * medianCharSizePx) {
+            return BubbleKind.SFX
         }
+        if (ringStddev >= Tuning.SFX_RING_STDDEV_MIN) return BubbleKind.SFX
+        if (mask != null && ringStddev < Tuning.DIALOGUE_RING_STDDEV_MAX) return BubbleKind.DIALOGUE
         return BubbleKind.FREE_TEXT
     }
 

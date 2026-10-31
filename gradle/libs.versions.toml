@@ -52,6 +52,7 @@ uiautomator = { group = "androidx.test.uiautomator", name = "uiautomator", versi
 mlkit-ocr-ja = { group = "com.google.mlkit", name = "text-recognition-japanese", version.ref = "mlkitOcr" }
 mlkit-ocr-zh = { group = "com.google.mlkit", name = "text-recognition-chinese", version.ref = "mlkitOcr" }
 mlkit-ocr-ko = { group = "com.google.mlkit", name = "text-recognition-korean", version.ref = "mlkitOcr" }
+mlkit-ocr-latin = { group = "com.google.mlkit", name = "text-recognition", version.ref = "mlkitOcr" }
 mlkit-translate = { group = "com.google.mlkit", name = "translate", version.ref = "mlkitTranslate" }
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

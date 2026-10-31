@@ -40,6 +40,27 @@ class BubbleRegionEstimatorTest {
     }
 
     @Test
+    fun pageWallInsideTheSearchBoundDoesNotSwallowTheArt() {
+        // The page border sits inside the search bound, so the flood never
+        // touches the bound's perimeter. It still fills the page.
+        val quarter = white(100, 100)
+        for (i in 10 until 90) {
+            quarter.bytes[10 * 100 + i] = 0
+            quarter.bytes[89 * 100 + i] = 0
+            quarter.bytes[i * 100 + 10] = 0
+            quarter.bytes[i * 100 + 89] = 0
+        }
+        val region = BubbleRegionEstimator.estimate(
+            quarter,
+            IntRect(160, 160, 240, 220),
+            charSizePx = 48f,
+            padPx = 8,
+        )
+        assertNull(region.mask)
+        assertTrue(region.leaked)
+    }
+
+    @Test
     fun borderlessTextOnWhiteFallsBack() {
         val quarter = white(60, 60)
         val union = IntRect(100, 60, 140, 200)
@@ -89,5 +110,20 @@ class BubbleRegionEstimatorTest {
         val region = BubbleRegionEstimator.estimate(quarter, union, charSizePx = 20f, padPx = 16)
         assertNotNull(region.mask)
         assertTrue(region.mask!!.fillRatio() > 0.92f)
+    }
+
+    @Test
+    fun solidInkInTheBoxDoesNotBecomeTheBalloon() {
+        val quarter = white(60, 60)
+        ellipseOutline(quarter, 30, 30, 12, 10)
+        for (y in 27 until 33) {
+            for (x in 26 until 34) quarter.bytes[y * 60 + x] = 0
+        }
+        val union = IntRect(104, 108, 136, 132)
+        val region = BubbleRegionEstimator.estimate(quarter, union, charSizePx = 24f, padPx = 8)
+        assertNotNull(region.mask)
+        val box = region.mask!!.boundingBoxFrame()
+        assertNotNull(box)
+        assertTrue(box!!.width > union.width * 2, "mask stayed on the ink: $box")
     }
 }
