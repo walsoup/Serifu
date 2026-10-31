@@ -3,7 +3,7 @@
     <string name="app_name">Serifu</string>
     <string name="a11y_service_label">Serifu</string>
     <string name="a11y_service_summary">Letters translations onto manga pages.</string>
-    <string name="a11y_service_description">Serifu takes screenshots of the reader apps you choose, recognises the text on your device and draws translations on top. Nothing leaves your phone. Serifu does not read other apps\' content, and it never uses your keystrokes except to notice volume-key page turns.</string>
+    <string name="a11y_service_description">Serifu takes screenshots of the reader apps you choose, recognises the text on your device and draws translations on top. Nothing leaves your phone unless you turn on the optional API engine. Serifu does not read other apps\' content, and it never uses your keystrokes except to notice volume-key page turns.</string>
 
     <string name="welcome_title">Serifu</string>
     <string name="welcome_body">Read raw manga, manhua and manhwa with translations lettered right into the bubbles. Everything happens on your phone.</string>
@@ -24,7 +24,7 @@
     <string name="home_hint">Finish setup, then allow Serifu under Accessibility. The pill shows up on the edge of your reader.</string>
     <string name="home_active_hint">The floating pill attaches to reader apps when opened.</string>
     <string name="home_off_hint">Tap Turn on below to activate the translation overlay.</string>
-    <string name="home_footer">On-device OCR · Zero cloud calls · 100%% private</string>
+    <string name="home_footer">On-device OCR · Zero cloud calls by default · API engine optional</string>
     <string name="engine_mlkit">On-Device ML Kit</string>
     <string name="lettering_hint">Lettering font, uppercase styling, SFX tags</string>
     <string name="mode_label">Mode</string>
@@ -157,7 +157,7 @@
     <string name="hide_latency">Last hide %1$d.%2$d ms</string>
 
     <string name="about_title">About</string>
-    <string name="about_body">Serifu letters raw manga, manhua and manhwa on your phone. Nothing leaves the device while you read.</string>
+    <string name="about_body">Serifu letters raw manga, manhua and manhwa on your phone. Nothing leaves the device while you read unless you enable the optional API engine.</string>
     <string name="version_format">Version %1$s</string>
     <string name="licenses">Licences</string>
     <string name="readers_section">Reader applications</string>
@@ -174,8 +174,8 @@
     <string name="feature_ocr_body">Japanese, Chinese and Korean recognition runs 100% locally on your phone.</string>
     <string name="feature_lettering_title">Native lettering</string>
     <string name="feature_lettering_body">Dialogue is drawn directly inside original bubbles.</string>
-    <string name="feature_privacy_title">Absolute privacy</string>
-    <string name="feature_privacy_body">Zero cloud calls. Screenshots never leave your device.</string>
+    <string name="feature_privacy_title">Private by default</string>
+    <string name="feature_privacy_body">On-device by default. Pages only leave your device if you enable the API engine.</string>
     <string name="welcome_overline">Manga translator</string>
     <string name="script_label">Script</string>
     <string name="config_label">Configuration</string>
