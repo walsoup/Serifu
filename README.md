@@ -22,10 +22,7 @@ Home picks the source script and the trigger:
 
 <img src="docs/home.png" width="360" alt="Home with Japanese selected">
 
-The sample page bundles:
-
-- The full Volume 1 of *Give My Regards to Black Jack* (ブラックジャックによろしく) by SHUHO SATO (佐藤秀峰) - 209 pages, shared by the author under free secondary-use terms (二次利用フリー) for vertical-scroll reading and live lettering
-- A multi-language stick-figure comic test page
+The sample page bundles the full Volume 1 of *Give My Regards to Black Jack* (ブラックジャックによろしく) by SHUHO SATO (佐藤秀峰) - 209 pages, shared by the author under free secondary-use terms (二次利用フリー) - plus a multi-language stick-figure comic test page.
 
 **Translate** runs OCR, clustering, translation, and lettering. **Boxes** draws the regions the clusterer found. Tap the page to hide the toolbar.
 
@@ -51,16 +48,14 @@ The rest of the settings sit on the home screen, under the trigger.
 
 ## First launch
 
-Four steps:
-
 1. Pick the source script.
 2. Grant the restricted settings Android requires for a sideloaded accessibility app.
 3. Enable the accessibility service.
 4. Choose the reader apps.
 
-The service is what takes the screenshot. While it is off, the bottom button opens accessibility settings. With it on, the button is Read a sample page, unless the trigger is Off, in which case it turns Serifu back to Auto.
+The service is what takes the screenshot. While it is off, the bottom button opens accessibility settings. With it on, the button reads a sample page instead.
 
-Over a chosen reader, a tactile pill sits on the screen edge. A tap translates the current page, while a double-tap opens the floating HUD to swap languages on the fly, adjust trigger modes, or pause translation.
+Over a chosen reader, a pill sits on the screen edge. A tap translates the current page; a double-tap opens a floating HUD to swap languages, change trigger modes, or pause.
 
 <p align="center">
   <img src="docs/hud.png" width="340" alt="Floating HUD overlay with language strip and controls">
@@ -70,62 +65,20 @@ Over a chosen reader, a tactile pill sits on the screen edge. A tap translates t
 
 ## How it works
 
-Three Gradle modules:
+Three Gradle modules: `:core` (plain Kotlin, no Android imports), `:app` (the phone), and `:linen` (the design system the screens are built on). Serifu paints with its own palette: paper `#F3EEE3`, ink `#16140F`, hanko `#C8322B`.
 
-- `:core` - plain Kotlin, no Android imports.
-- `:app` - the phone.
-- `:linen` - the design system the screens are built on.
-
-Serifu paints with its own palette: paper `#F3EEE3`, ink `#16140F`, hanko `#C8322B`.
-
-### TranslationEngine (`:core`)
-
-The translator boundary.
-
-- `availability(source, target)` returns `Ready`, `NeedsDownload`, `Downloading`, or `Unsupported`.
-- `translatePage` takes a `PageTranslationRequest` (source language, target tag, one `BubbleText` per bubble, the previous page's lines, and whether to keep honorifics) and returns a `PageTranslationResult`, a map of bubble id to English.
-- `EngineId` is `MLKIT`, `GEMMA4_E2B`, or `AI_REMOTE`.
-
-On-device translation is `MlKitTranslationEngine`. The cloud backend is `RemoteAiTranslationEngine` in `:app`: it posts the page's bubbles to the configured endpoint and caches the replies. `GEMMA4_E2B` is a cache-key value. `PromptBuilder` and `LlmResponseParser` turn bubbles into a prompt and read a reply back, and both have tests beside the other `:core` tests.
-
-### Page flow (`:app`)
-
-`PagePipeline` is the page path: vertical retiling, `SpeechBubbleClusterer`, ML Kit, then `LetteringRenderer`. The accessibility service and the sample page both call it.
-
-The reading loop is `Reducer.reduce(state, event, now, config)`. It returns a `Transition`: the next `CoordinatorState` plus a list of `Effect`s (`Capture`, `Process`, `ShowPage`, `ScheduleSettle`, show or hide the pill, and the rest). Screenshot and translation are effects, run by `EventRouter`, which turns accessibility callbacks into those events.
-
-Shared vision types:
-
-- `OcrLine` is one recognized line: text, box, confidence, angle, and per-glyph boxes.
-- `SpeechBubbleCluster` groups the lines of one balloon. `letteringRect` is the box the English has to fit. `patchRect` is what gets painted over. `kind` is a `BubbleKind`: `DIALOGUE`, `CAPTION`, `SFX`, or `FREE_TEXT`.
-
-`SerifuAccessibilityService` takes the screenshot. `OverlayManager` draws the lettering and the pill.
+- **Translation** lives behind `TranslationEngine` in `:core`. On-device uses ML Kit; the optional cloud backend posts the page's bubbles to your endpoint and caches the replies.
+- **Page flow** is one pipeline: split the page, cluster the bubbles, OCR, translate, letter. The accessibility service and the sample page both run it.
+- **The reading loop** is a reducer. Accessibility callbacks become events; the reducer returns the next state plus effects like capture, process, show page, or move the pill.
 
 ## Tests
 
-JVM, no device:
-
 ```
-./gradlew :core:test :app:testDebugUnitTest
-```
-
-`:core:test`
-
-- Bubbles and ink: `BubbleRegionEstimatorTest`, `SpeechBubbleClustererTest`, `BubbleCleanTest`, `BubbleSpanTest`, `LineFilterTest`, `ColorSamplerTest`, `InkWallDetectorTest`, `FuriganaFilterTest`.
-- Lettering fit: `BalloonBreakTest`, `TextFitSearchTest`.
-- Translation: `TranslationCacheTest`, `PromptBuilderTest`, `LlmResponseParserTest`.
-- The reading loop and capture: `ReducerTest`, `PageCacheTest`, `ScrollEstimatorTest`, `FrameFingerprintTest`, `CaptureRetryTest`, `SelfDetectionTest`.
-- Smaller checks: `LumaMathTest`, `GeometryTest`, `OrientationTest`, `TextNormalizerTest`, `TuningTest`.
-
-`:app:testDebugUnitTest` is `LetteringRendererTest` (the patch stays inside the bubble), `RemoteAiTranslationEngineTest`, `EventRouterTest`, and `SettingsCodecTest`.
-
-On a device:
-
-```
-./gradlew :app:connectedDebugAndroidTest
+./gradlew :core:test :app:testDebugUnitTest   # JVM, no device
+./gradlew :app:connectedDebugAndroidTest      # on a device
 ```
 
-`PipelineOnTestPageTest` opens the sample page, copies the window, and expects the line プラスチック plus lettering in the bubbles. `SvgPanelPairTest` draws two panels from SVG and checks each bubble comes back with a translation.
+The JVM tests cover bubble detection and cleanup, lettering fit, the translation cache and prompt handling, and the reading loop. The device test opens the sample page, translates it, and checks that lettering lands inside the bubbles.
 
 ## Build
 
@@ -141,4 +94,4 @@ Serifu's own code is source-available under the PolyForm Noncommercial License 1
 
 ## Status
 
-Serifu is a beta. The pipeline is covered by JVM unit tests, but it has not been validated on real devices yet, so OCR and lettering may still change. Feedback and bug reports are welcome.
+Serifu is a beta, tested on real devices. OCR and lettering may still change between releases. Feedback and bug reports are welcome.
