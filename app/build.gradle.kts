@@ -36,7 +36,7 @@ android {
     }
 
     val dotEnv = loadDotEnv(rootProject.file(".env"))
-    val releaseKeystore = dotEnv["KEYSTORE_FILE"]?.let { file(it) }?.takeIf { it.isFile }
+    val releaseKeystore = dotEnv["KEYSTORE_FILE"]?.let { rootProject.file(it) }?.takeIf { it.isFile }
 
     signingConfigs {
         if (releaseKeystore != null) {
