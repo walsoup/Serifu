@@ -2,7 +2,7 @@
   <img src="docs/icon.png" width="96" alt="Serifu icon, a vermilion rounded square with a white セ">
 </p>
 
-# Serifu
+# Serifu (セリフ)
 
 Serifu translates manga, manhua, and manhwa on an Android phone. It screenshots a reader you choose, finds the bubbles, and draws English over them.
 
@@ -11,6 +11,10 @@ Serifu translates manga, manhua, and manhwa on an Android phone. It screenshots 
 - One-time language pack download of about 30 MB
 
 This tree is version 0.6.6-beta, with `applicationId` `app.walsoup.serifu` and `minSdk` 30.
+
+## Download
+
+Get the latest APK from [Releases](https://github.com/walsoup/Serifu/releases/latest). Needs Android 11 or newer on an arm64 phone; first launch walks you through the restricted settings and accessibility service setup.
 
 ## Pages
 
@@ -94,4 +98,4 @@ Serifu's own code is source-available under the PolyForm Noncommercial License 1
 
 ## Status
 
-Serifu is a beta, tested on real devices. OCR and lettering may still change between releases. Feedback and bug reports are welcome.
+Serifu is still in early development, tested on real devices. OCR and lettering may still change between releases. If you find a bug or have feedback, please [open an issue](https://github.com/walsoup/Serifu/issues).
