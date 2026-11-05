@@ -1,10 +1,10 @@
-name: Release build
+name: Native library compression experiment
 
 on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build-release-apk:
@@ -51,42 +51,12 @@ jobs:
       - name: Stage APK
         run: |
           APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
-          cp "$APK" serifu-0.6.7-beta.apk
-          ls -la serifu-0.6.7-beta.apk
+          cp "$APK" serifu-native-compression-test.apk
+          ls -la serifu-native-compression-test.apk
 
       - name: Upload release APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: serifu-release-apk
-          path: serifu-0.6.7-beta.apk
+          name: serifu-native-compression-test-apk
+          path: serifu-native-compression-test.apk
           if-no-files-found: error
-
-      - name: Create draft release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          cat > /tmp/notes.md <<'NOTES'
-          First public beta of Serifu.
-
-          Serifu translates manga, manhua, and manhwa in place on your phone. It screenshots a reader app you choose, finds the speech bubbles, and draws English over them.
-
-          - Japanese, Chinese, and Korean, plus Latin-script sources (English, French, Spanish, German, Italian, Portuguese)
-          - On-device translation with ML Kit, or an optional OpenAI-compatible cloud backend
-          - Auto and manual translate triggers, with a floating HUD over your reader
-
-          ## Install
-
-          1. Download `serifu-0.6.7-beta.apk` below. Requires Android 11 or newer on an arm64 phone.
-          2. Allow installing from this source when Android asks.
-          3. On first launch, grant the restricted settings Android requires for sideloaded accessibility apps, then enable Serifu's accessibility service.
-
-          A one-time language pack download of about 30 MB runs on first use.
-
-          Beta: OCR and lettering may still change between releases. If you installed an earlier debug build, Android may refuse to install over it because the signatures differ. Uninstalling the old build fixes that, but it deletes Serifu's saved settings, so check the app for anything you want to keep first.
-          NOTES
-          if gh release view 0.6.7-beta >/dev/null 2>&1; then
-            gh release upload 0.6.7-beta serifu-0.6.7-beta.apk --clobber
-            gh release edit 0.6.7-beta --draft --title "Serifu 0.6.7-beta" --notes-file /tmp/notes.md
-          else
-            gh release create 0.6.7-beta --draft --title "Serifu 0.6.7-beta" --notes-file /tmp/notes.md serifu-0.6.7-beta.apk
-          fi
