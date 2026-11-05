@@ -36,11 +36,17 @@ jobs:
           ./gradlew :app:assembleRelease --no-daemon
 
       - name: Verify APK signature
+        env:
+          KS_PASS: ${{ secrets.SERIFU_SIGNING_PASSWORD }}
         run: |
           APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
           BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
           "$BT/apksigner" verify --print-certs "$APK" | tee /tmp/apk-certs.txt
-          grep -q "CN=Walid Elonok" /tmp/apk-certs.txt || { echo "::error::APK is not signed with the Serifu release key"; exit 1; }
+          EXPECTED=$(keytool -list -v -keystore signing/serifu-release.jks -alias serifu -storepass "$KS_PASS" | awk '/SHA256:/{print $2}' | tr -d ':' | tr 'A-F' 'a-f')
+          ACTUAL=$(awk '/SHA-256 digest:/{print $NF}' /tmp/apk-certs.txt | head -1 | tr 'A-F' 'a-f')
+          echo "keystore cert digest: $EXPECTED"
+          echo "apk signer digest:    $ACTUAL"
+          test -n "$EXPECTED" && test -n "$ACTUAL" && test "$EXPECTED" = "$ACTUAL" || { echo "::error::APK signer does not match the Serifu release keystore"; exit 1; }
 
       - name: Stage APK
         run: |
