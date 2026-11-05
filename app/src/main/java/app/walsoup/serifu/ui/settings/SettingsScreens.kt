@@ -49,6 +49,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import app.walsoup.serifu.ml.isGeminiEndpoint
 import app.walsoup.serifu.ui.components.SerifuIcons
 import app.serifu.core.model.QualityMode
 import app.serifu.core.model.ReasoningEffort
@@ -546,12 +547,6 @@ fun BehaviourScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
             onCheckedChange = { checked -> viewModel.update { it.copy(haptics = checked) } },
             subtitle = stringResource(R.string.haptics_subtitle),
         )
-        SwitchLine(
-            label = stringResource(R.string.llm_cache),
-            checked = settings.llmDiskCache,
-            onCheckedChange = { checked -> viewModel.update { it.copy(llmDiskCache = checked) } },
-            subtitle = stringResource(R.string.llm_cache_subtitle),
-        )
 
         SectionTitle(stringResource(R.string.pill_panel))
         GroupLabel(stringResource(R.string.pill_edge_label))
@@ -780,6 +775,14 @@ fun EngineScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
                 }
             } else null,
         )
+        if (isGeminiEndpoint(localEndpoint)) {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = stringResource(R.string.ai_gemini_model_note),
+                style = Serifu.type.caption,
+                color = c.textSecondary,
+            )
+        }
 
         SectionTitle(stringResource(R.string.engine_mlkit))
         packs.forEachIndexed { index, pack ->

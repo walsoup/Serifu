@@ -27,6 +27,7 @@ import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLEncoder
 import java.security.MessageDigest
 
 class RemoteAiTranslationEngine(
@@ -153,26 +154,17 @@ class RemoteAiTranslationEngine(
         val model = settings.aiModel.trim().ifEmpty { "gpt-4o-mini" }
         val rawEndpoint = settings.aiEndpoint.trim()
 
-        val isGemini = rawEndpoint.contains("googleapis.com")
-        Log.i(TAG, "Calling AI: model=$model, effort=$effort")
+        val isGemini = isGeminiEndpoint(rawEndpoint)
+        Log.i(
+            TAG,
+            if (isGemini) {
+                "Calling Gemini (model comes from the endpoint URL), effort=$effort"
+            } else {
+                "Calling AI: model=$model, effort=$effort"
+            },
+        )
 
-        val targetUrl = when {
-            isGemini -> {
-                if (rawEndpoint.contains("key=")) rawEndpoint else "$rawEndpoint?key=$apiKey"
-            }
-            rawEndpoint.isEmpty() -> {
-                "https://api.openai.com/v1/chat/completions"
-            }
-            rawEndpoint.endsWith("/chat/completions") -> {
-                rawEndpoint
-            }
-            rawEndpoint.endsWith("/") -> {
-                "${rawEndpoint}chat/completions"
-            }
-            else -> {
-                "$rawEndpoint/chat/completions"
-            }
-        }
+        val targetUrl = buildRemoteRequestUrl(rawEndpoint, apiKey)
 
         val requestBody = if (isGemini) {
             buildJsonObject {
@@ -288,6 +280,37 @@ class RemoteAiTranslationEngine(
     private companion object {
         const val TAG = "RemoteAiTranslate"
     }
+}
+
+internal fun isGeminiEndpoint(endpoint: String): Boolean =
+    endpoint.contains("googleapis.com", ignoreCase = true)
+
+internal fun buildRemoteRequestUrl(endpoint: String, apiKey: String): String {
+    val raw = endpoint.trim()
+    if (isGeminiEndpoint(raw)) return appendQueryParameter(raw, "key", apiKey.trim())
+    return when {
+        raw.isEmpty() -> "https://api.openai.com/v1/chat/completions"
+        raw.endsWith("/chat/completions") -> raw
+        raw.endsWith("/") -> "${raw}chat/completions"
+        else -> "$raw/chat/completions"
+    }
+}
+
+private fun appendQueryParameter(url: String, name: String, value: String): String {
+    if (value.isEmpty() || queryParameterNames(url).any { it == name }) return url
+    val hash = url.indexOf('#')
+    val beforeFragment = if (hash >= 0) url.substring(0, hash) else url
+    val fragment = if (hash >= 0) url.substring(hash) else ""
+    val base = beforeFragment.trimEnd('?', '&')
+    val separator = if ('?' in base) '&' else '?'
+    val encoded = URLEncoder.encode(value, Charsets.UTF_8.name())
+    return "$base$separator$name=$encoded$fragment"
+}
+
+private fun queryParameterNames(url: String): List<String> {
+    val query = url.substringAfter('?', missingDelimiterValue = "").substringBefore('#')
+    if (query.isEmpty()) return emptyList()
+    return query.split('&').map { it.substringBefore('=').trim() }.filter { it.isNotEmpty() }
 }
 
 private class ApiException(val statusCode: Int, val errorBody: String) :

@@ -42,7 +42,7 @@ The rest of the settings sit on the home screen, under the trigger.
 | Lettering | Font, size range, sound effects (compact, cover, or off). A fresh install uses 9-22 sp. |
 | Reader apps | Packages Serifu is allowed to screenshot |
 | Behaviour | How long Auto waits after the last scroll (default 450 ms), plus honorifics and the pill |
-| Engine | On-device ML Kit or an OpenAI-compatible API endpoint (Fast, Progressive, Best only) |
+| Engine | On-device ML Kit, or an OpenAI-compatible API endpoint |
 | Debug | Region outlines and the reasoning level sent to the API engine |
 | About | Version and the OFL font licences |
 
@@ -71,7 +71,7 @@ Over a chosen reader, a pill sits on the screen edge. A tap translates the curre
 
 Three Gradle modules: `:core` (plain Kotlin, no Android imports), `:app` (the phone), and `:linen` (the design system the screens are built on). Serifu paints with its own palette: paper `#F3EEE3`, ink `#16140F`, hanko `#C8322B`.
 
-- **Translation** lives behind `TranslationEngine` in `:core`. On-device uses ML Kit; the optional cloud backend posts the page's bubbles to your endpoint and caches the replies.
+- **Translation** lives behind `TranslationEngine` in `:core`. On-device uses ML Kit; the optional cloud backend posts the page's bubbles to your endpoint and keeps those replies in an in-memory cache for the session.
 - **Page flow** is one pipeline: split the page, cluster the bubbles, OCR, translate, letter. The accessibility service and the sample page both run it.
 - **The reading loop** is a reducer. Accessibility callbacks become events; the reducer returns the next state plus effects like capture, process, show page, or move the pill.
 

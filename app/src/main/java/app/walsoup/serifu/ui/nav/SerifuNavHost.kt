@@ -38,10 +38,12 @@ object Routes {
     const val About = "about"
 
     fun onboarding(step: Int) = "onboarding/$step"
+
+    fun start(onboardingDone: Boolean): String = if (onboardingDone) Home else onboarding(1)
 }
 
 @Composable
-fun SerifuNavHost(startAtOnboarding: Boolean) {
+fun SerifuNavHost(onboardingDone: Boolean) {
     val context = LocalContext.current
     val app = context.applicationContext as SerifuApp
     val activity = context as ComponentActivity
@@ -51,7 +53,7 @@ fun SerifuNavHost(startAtOnboarding: Boolean) {
     val nav = rememberNavController()
     NavHost(
         navController = nav,
-        startDestination = if (startAtOnboarding) Routes.onboarding(1) else Routes.Home,
+        startDestination = Routes.start(onboardingDone),
         enterTransition = {
             slideIntoContainer(
                 towards = AnimatedContentTransitionScope.SlideDirection.Start,

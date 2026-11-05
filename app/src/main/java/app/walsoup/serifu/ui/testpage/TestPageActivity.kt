@@ -67,8 +67,6 @@ import kotlinx.coroutines.launch
 class TestPageActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setShowWhenLocked(true)
-        setTurnScreenOn(true)
         enableEdgeToEdge()
         val startBottom = intent.getBooleanExtra(EXTRA_START_BOTTOM, false)
         val requestedLanguage = when (intent.getStringExtra(EXTRA_LANGUAGE)) {

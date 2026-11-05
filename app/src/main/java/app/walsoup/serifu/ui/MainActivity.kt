@@ -27,7 +27,7 @@ class MainActivity : ComponentActivity() {
                 if (loaded == null) {
                     Box(Modifier.fillMaxSize().background(Serifu.colors.bg))
                 } else {
-                    SerifuNavHost(startAtOnboarding = !loaded.onboardingDone)
+                    SerifuNavHost(onboardingDone = loaded.onboardingDone)
                 }
             }
         }

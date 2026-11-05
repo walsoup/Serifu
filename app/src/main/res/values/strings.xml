@@ -93,9 +93,6 @@
     <string name="pill_opacity_subtitle">Transparency level when reading without interaction</string>
     <string name="pill_panel">Floating control pill</string>
     <string name="pill_edge_label">Screen edge</string>
-    <string name="llm_cache">Keep a disk cache of high quality translations</string>
-    <string name="llm_cache_subtitle">Cache translation results to minimize processing</string>
-
     <string name="engine_title">Engine</string>
     <string name="engine_body">Choose how pages are translated: completely on-device or through an API model.</string>
     <string name="pack_on_phone">On the phone</string>
@@ -107,10 +104,6 @@
     <string name="engine_on_device_desc">Runs 100% offline with ML Kit. Fast, private, no network required.</string>
     <string name="engine_api">API</string>
     <string name="engine_api_desc">Translates via an OpenAI-compatible API endpoint (OpenAI, OpenRouter, Groq, DeepSeek, or local models via Ollama / vLLM / LM Studio).</string>
-    <string name="quality_label">Translation engine</string>
-    <string name="quality_fast">On-device</string>
-    <string name="quality_progressive">API</string>
-    <string name="quality_best">API</string>
     <string name="engine_ai_title">API configuration</string>
     <string name="engine_ai_body">Translate with any OpenAI-compatible endpoint. For local runners (Ollama, LM Studio), leave the API key blank.</string>
     <string name="engine_api_title">API configuration</string>
@@ -121,6 +114,7 @@
     <string name="ai_model_placeholder">gpt-4o-mini</string>
     <string name="ai_endpoint_label">Custom Endpoint</string>
     <string name="ai_endpoint_placeholder">https://api.openai.com/v1/chat/completions</string>
+    <string name="ai_gemini_model_note">Gemini uses the model named in this URL. The model name field is not sent.</string>
     <string name="reasoning_effort_label">Reasoning level</string>
     <string name="reasoning_effort_desc">Lower reasoning speeds up translation. If set to None and unsupported by the model, Serifu falls back automatically.</string>
     <string name="ai_configured">Configured</string>

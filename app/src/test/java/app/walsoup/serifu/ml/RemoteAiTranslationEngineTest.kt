@@ -92,4 +92,52 @@ class RemoteAiTranslationEngineTest {
         org.junit.Assert.assertNotEquals(tagBase, tagDiffEndpoint)
         org.junit.Assert.assertNotEquals(tagBase, tagDiffEffort)
     }
+
+    @Test
+    fun geminiKeyIsEncodedAndAppendedBesideExistingQueryParameters() {
+        val base = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+        assertTrue(isGeminiEndpoint(base))
+        assertEquals(
+            "$base?key=abc",
+            buildRemoteRequestUrl(base, "abc"),
+        )
+        assertEquals(
+            "$base?alt=json&key=a%26b%2Bc",
+            buildRemoteRequestUrl("$base?alt=json", "a&b+c"),
+        )
+        assertEquals(
+            "$base?key=already#section",
+            buildRemoteRequestUrl("$base?key=already#section", "other"),
+        )
+        assertEquals(
+            "$base?key=abc#frag",
+            buildRemoteRequestUrl("$base#frag", "abc"),
+        )
+        assertEquals(base, buildRemoteRequestUrl(base, "  "))
+        assertEquals(
+            "$base?monkey=1&key=abc",
+            buildRemoteRequestUrl("$base?monkey=1", "abc"),
+        )
+    }
+
+    @Test
+    fun openAiCompatibleUrlsKeepTheirPathRules() {
+        assertFalse(isGeminiEndpoint("https://api.openai.com/v1"))
+        assertEquals(
+            "https://api.openai.com/v1/chat/completions",
+            buildRemoteRequestUrl("", "sk-test"),
+        )
+        assertEquals(
+            "https://api.openai.com/v1/chat/completions",
+            buildRemoteRequestUrl("https://api.openai.com/v1", "sk-test"),
+        )
+        assertEquals(
+            "http://localhost:11434/v1/chat/completions",
+            buildRemoteRequestUrl("http://localhost:11434/v1/", " "),
+        )
+        assertEquals(
+            "https://example.com/v1/chat/completions",
+            buildRemoteRequestUrl("https://example.com/v1/chat/completions", "sk-test"),
+        )
+    }
 }
