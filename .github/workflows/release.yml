@@ -42,14 +42,14 @@ jobs:
       - name: Stage APK
         run: |
           APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
-          cp "$APK" serifu-0.6.6-beta.apk
-          ls -la serifu-0.6.6-beta.apk
+          cp "$APK" serifu-0.6.7-beta.apk
+          ls -la serifu-0.6.7-beta.apk
 
       - name: Upload release APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: serifu-release-apk
-          path: serifu-0.6.6-beta.apk
+          path: serifu-0.6.7-beta.apk
           if-no-files-found: error
 
       - name: Create draft release
@@ -67,7 +67,7 @@ jobs:
 
           ## Install
 
-          1. Download `serifu-0.6.6-beta.apk` below. Requires Android 11 or newer on an arm64 phone.
+          1. Download `serifu-0.6.7-beta.apk` below. Requires Android 11 or newer on an arm64 phone.
           2. Allow installing from this source when Android asks.
           3. On first launch, grant the restricted settings Android requires for sideloaded accessibility apps, then enable Serifu's accessibility service.
 
@@ -75,4 +75,4 @@ jobs:
 
           Beta: OCR and lettering may still change between releases. If you installed an earlier debug build, uninstall it before installing this one - the signatures differ.
           NOTES
-          gh release create 0.6.6-beta --draft --title "Serifu 0.6.6-beta" --notes-file /tmp/notes.md serifu-0.6.6-beta.apk
+          gh release create 0.6.7-beta --draft --title "Serifu 0.6.7-beta" --notes-file /tmp/notes.md serifu-0.6.7-beta.apk
