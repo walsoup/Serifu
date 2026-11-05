@@ -82,7 +82,7 @@ jobs:
 
           A one-time language pack download of about 30 MB runs on first use.
 
-          Beta: OCR and lettering may still change between releases. If you installed an earlier debug build, uninstall it before installing this one - the signatures differ.
+          Beta: OCR and lettering may still change between releases. If you installed an earlier debug build, Android may refuse to install over it because the signatures differ. Uninstalling the old build fixes that, but it deletes Serifu's saved settings, so check the app for anything you want to keep first.
           NOTES
           if gh release view 0.6.7-beta >/dev/null 2>&1; then
             gh release upload 0.6.7-beta serifu-0.6.7-beta.apk --clobber
