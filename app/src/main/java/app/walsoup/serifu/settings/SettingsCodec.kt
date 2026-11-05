@@ -35,7 +35,6 @@ internal object SettingsKeys {
     val pillIdleAlpha = floatPreferencesKey("pillIdleAlpha")
     val haptics = booleanPreferencesKey("haptics")
     val wifiOnlyDownloads = booleanPreferencesKey("wifiOnlyDownloads")
-    val llmDiskCache = booleanPreferencesKey("llmDiskCache")
     val debugOverlay = booleanPreferencesKey("debugOverlay")
     val dynamicColor = booleanPreferencesKey("dynamicColor")
     val onboardingDone = booleanPreferencesKey("onboardingDone")
@@ -64,7 +63,7 @@ internal fun Settings.writeTo(prefs: MutablePreferences) {
     prefs[SettingsKeys.pillIdleAlpha] = Tuning.snapPillIdleAlpha(pillIdleAlpha)
     prefs[SettingsKeys.haptics] = haptics
     prefs[SettingsKeys.wifiOnlyDownloads] = wifiOnlyDownloads
-    prefs[SettingsKeys.llmDiskCache] = llmDiskCache
+    prefs.remove(booleanPreferencesKey("llmDiskCache"))
     prefs[SettingsKeys.debugOverlay] = debugOverlay
     prefs[SettingsKeys.dynamicColor] = dynamicColor
     prefs[SettingsKeys.onboardingDone] = onboardingDone
@@ -95,7 +94,6 @@ internal fun Preferences.toSettings(defaultReaders: Set<String>): Settings {
         pillIdleAlpha = Tuning.snapPillIdleAlpha(this[SettingsKeys.pillIdleAlpha] ?: defaults.pillIdleAlpha),
         haptics = this[SettingsKeys.haptics] ?: defaults.haptics,
         wifiOnlyDownloads = this[SettingsKeys.wifiOnlyDownloads] ?: defaults.wifiOnlyDownloads,
-        llmDiskCache = this[SettingsKeys.llmDiskCache] ?: defaults.llmDiskCache,
         debugOverlay = this[SettingsKeys.debugOverlay] ?: defaults.debugOverlay,
         dynamicColor = this[SettingsKeys.dynamicColor] ?: defaults.dynamicColor,
         onboardingDone = this[SettingsKeys.onboardingDone] ?: defaults.onboardingDone,
