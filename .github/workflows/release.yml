@@ -27,6 +27,8 @@ jobs:
           mkdir -p signing
           echo "${{ secrets.SERIFU_KEYSTORE_BASE64 }}" | base64 -d > signing/serifu-release.jks
           printf 'KEYSTORE_FILE=signing/serifu-release.jks\nKEYSTORE_PASSWORD=%s\nKEY_ALIAS=serifu\nKEY_PASSWORD=%s\n' "${{ secrets.SERIFU_SIGNING_PASSWORD }}" "${{ secrets.SERIFU_SIGNING_PASSWORD }}" > .env
+          # Fail closed: the decoded keystore must be the backed-up Serifu release key.
+          echo "29e0ffdc6be96187fcf78a8422b8acd842c3180c6f400a7236ce5f3443f9c50c  signing/serifu-release.jks" | sha256sum -c -
 
       - name: Build release APK
         run: |
@@ -37,7 +39,8 @@ jobs:
         run: |
           APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
           BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
-          "$BT/apksigner" verify --print-certs "$APK"
+          "$BT/apksigner" verify --print-certs "$APK" | tee /tmp/apk-certs.txt
+          grep -q "CN=Walid Elonok" /tmp/apk-certs.txt || { echo "::error::APK is not signed with the Serifu release key"; exit 1; }
 
       - name: Stage APK
         run: |
@@ -75,4 +78,9 @@ jobs:
 
           Beta: OCR and lettering may still change between releases. If you installed an earlier debug build, uninstall it before installing this one - the signatures differ.
           NOTES
-          gh release create 0.6.7-beta --draft --title "Serifu 0.6.7-beta" --notes-file /tmp/notes.md serifu-0.6.7-beta.apk
+          if gh release view 0.6.7-beta >/dev/null 2>&1; then
+            gh release upload 0.6.7-beta serifu-0.6.7-beta.apk --clobber
+            gh release edit 0.6.7-beta --draft --title "Serifu 0.6.7-beta" --notes-file /tmp/notes.md
+          else
+            gh release create 0.6.7-beta --draft --title "Serifu 0.6.7-beta" --notes-file /tmp/notes.md serifu-0.6.7-beta.apk
+          fi
