@@ -10,7 +10,7 @@ Serifu translates manga, manhua, and manhwa on an Android phone. It screenshots 
 - On-device translation with ML Kit, or an optional OpenAI-compatible cloud backend
 - One-time language pack download of about 30 MB
 
-This tree is version 0.6.6-beta, with `applicationId` `app.walsoup.serifu` and `minSdk` 30.
+This tree is version 0.6.7-beta, with `applicationId` `app.walsoup.serifu` and `minSdk` 30.
 
 ## Download
 
