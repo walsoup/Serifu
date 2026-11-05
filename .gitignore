@@ -16,8 +16,7 @@ captures/
 signing/
 screens/
 
-# Dot folders and Linen design system
+# Dot folders
 .*/
 !.github/
-linen/
 
