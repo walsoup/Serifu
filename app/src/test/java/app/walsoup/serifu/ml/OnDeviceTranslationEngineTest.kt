@@ -126,7 +126,9 @@ class OnDeviceTranslationEngineTest {
         val models = BergamotModelManager(context)
         val mlKit = RecordingEngine(EngineId.MLKIT)
         val bergamot = ScriptedBergamot(models) {
-            throw kotlinx.coroutines.TimeoutCancellationException("timed out")
+            kotlinx.coroutines.withTimeout(1) {
+                kotlinx.coroutines.delay(50)
+            }
         }
         val router = OnDeviceTranslationEngine(
             mlKit = mlKit,

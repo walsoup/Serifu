@@ -643,6 +643,7 @@ fun EngineScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
     var routeError by remember { mutableStateOf<String?>(null) }
     var downloadError by remember { mutableStateOf<String?>(null) }
     var downloading by remember { mutableStateOf(false) }
+    val downloadFailedFallback = stringResource(R.string.engine_bergamot_download_failed)
     LaunchedEffect(Unit) { LanguageModelManager.refreshDownloaded() }
     LaunchedEffect(settings.sourceLanguage, settings.targetLanguage, settings.bergamotVariant) {
         routeError = null
@@ -838,7 +839,7 @@ fun EngineScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
                                 } catch (t: Throwable) {
                                     android.util.Log.e("EngineScreen", "Bergamot download failed", t)
                                     downloadError = t.localizedMessage?.takeIf { it.isNotBlank() }
-                                        ?: context.getString(R.string.engine_bergamot_download_failed)
+                                        ?: downloadFailedFallback
                                 } finally {
                                     downloading = false
                                 }
