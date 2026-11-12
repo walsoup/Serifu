@@ -129,6 +129,7 @@ class OnDeviceTranslationEngineTest {
             kotlinx.coroutines.withTimeout(1) {
                 kotlinx.coroutines.delay(50)
             }
+            error("timeout should have thrown")
         }
         val router = OnDeviceTranslationEngine(
             mlKit = mlKit,
