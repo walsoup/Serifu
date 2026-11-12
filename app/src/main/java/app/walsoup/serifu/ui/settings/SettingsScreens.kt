@@ -845,6 +845,7 @@ fun EngineScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
                             }
                         },
                     )
+                }
                 if (downloading || inProgress.isNotEmpty()) {
                     Spacer(Modifier.height(8.dp))
                     Text(

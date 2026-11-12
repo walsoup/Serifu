@@ -21,6 +21,9 @@ import app.walsoup.serifu.capture.ScreenCapturer
 import app.walsoup.serifu.coordinator.PagePipeline
 import app.walsoup.serifu.coordinator.TranslationCoordinator
 import app.serifu.core.coordinator.Event
+import app.serifu.core.model.ModelVariant
+import app.serifu.core.model.OnDeviceEngine
+import app.serifu.core.model.QualityMode
 import app.walsoup.serifu.ml.BergamotModelManager
 import app.walsoup.serifu.ml.BergamotTranslationEngine
 import app.walsoup.serifu.ml.MlKitTranslationEngine
@@ -78,7 +81,7 @@ class SerifuAccessibilityService : AccessibilityService() {
         )
         val bergamot = BergamotTranslationEngine(
             models = bergamotModels,
-            variant = { app.settingsRepository.settings.value?.bergamotVariant ?: app.serifu.core.model.ModelVariant.LITE },
+            variant = { app.settingsRepository.settings.value?.bergamotVariant ?: ModelVariant.LITE },
         )
         translator = OnDeviceTranslationEngine(
             mlKit = mlKit,
@@ -86,15 +89,15 @@ class SerifuAccessibilityService : AccessibilityService() {
             models = bergamotModels,
             preferred = {
                 app.settingsRepository.settings.value?.onDeviceEngine
-                    ?: app.serifu.core.model.OnDeviceEngine.MLKIT
+                    ?: OnDeviceEngine.MLKIT
             },
             variant = {
                 app.settingsRepository.settings.value?.bergamotVariant
-                    ?: app.serifu.core.model.ModelVariant.LITE
+                    ?: ModelVariant.LITE
             },
             quality = {
                 app.settingsRepository.settings.value?.quality
-                    ?: app.serifu.core.model.QualityMode.FAST
+                    ?: QualityMode.FAST
             },
         )
         val remoteAi = RemoteAiTranslationEngine(
@@ -132,7 +135,7 @@ class SerifuAccessibilityService : AccessibilityService() {
         scope.launch {
             app.settingsRepository.settings.filterNotNull().collect { settings ->
                 reading.pushSettings(settings)
-                val isAiOnly = settings.quality == app.serifu.core.model.QualityMode.BEST_ONLY &&
+                val isAiOnly = settings.quality == QualityMode.BEST_ONLY &&
                     pagePipeline.hasAiConfigured(settings)
                 if (!isAiOnly) {
                     runCatching {
