@@ -51,8 +51,12 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import app.walsoup.serifu.ml.isGeminiEndpoint
 import app.walsoup.serifu.ui.components.SerifuIcons
+import app.serifu.core.model.ModelVariant
+import app.serifu.core.model.OnDeviceEngine
 import app.serifu.core.model.QualityMode
 import app.serifu.core.model.ReasoningEffort
+import app.serifu.core.translate.ModelRoute
+import app.serifu.bergamot.BergamotNative
 import app.walsoup.serifu.ui.testpage.TestPageActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -81,6 +85,7 @@ import app.serifu.core.model.SfxMode
 import app.serifu.core.model.SourceLanguage
 import app.serifu.core.model.TargetLanguage
 import androidx.compose.foundation.verticalScroll
+import app.walsoup.serifu.ml.BergamotInstalledModel
 import app.walsoup.serifu.ml.LanguageModelManager
 import app.walsoup.serifu.ml.LanguagePack
 import kotlinx.coroutines.launch
@@ -119,14 +124,18 @@ import app.walsoup.serifu.ui.versionName
 fun LanguagesScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val c = Serifu.colors
+    val app = LocalContext.current.applicationContext as SerifuApp
     val downloadedCodes by LanguageModelManager.downloadedCodes.collectAsStateWithLifecycle()
     val inProgressCodes by LanguageModelManager.inProgressCodes.collectAsStateWithLifecycle()
+    val bergamotInstalled by app.bergamotModels.installed.collectAsStateWithLifecycle()
     var pendingDelete by remember { mutableStateOf<LanguagePack?>(null) }
+    var pendingBergamotDelete by remember { mutableStateOf<BergamotInstalledModel?>(null) }
     var showAllTargets by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         LanguageModelManager.refreshDownloaded()
+        app.bergamotModels.refreshInstalled()
     }
 
     val needed = remember(settings.sourceLanguage, settings.targetLanguage) {
@@ -145,6 +154,18 @@ fun LanguagesScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
                 pendingDelete = null
             },
             onDismiss = { pendingDelete = null },
+        )
+    }
+    pendingBergamotDelete?.let { model ->
+        SerifuConfirmDialog(
+            title = stringResource(R.string.bergamot_delete_title, model.from, model.to),
+            text = stringResource(R.string.bergamot_delete_body),
+            confirmLabel = stringResource(R.string.delete),
+            onConfirm = {
+                app.bergamotModels.deletePair(model.from, model.to, model.architecture)
+                pendingBergamotDelete = null
+            },
+            onDismiss = { pendingBergamotDelete = null },
         )
     }
 
@@ -267,6 +288,38 @@ fun LanguagesScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
                 pack.code in downloadedCodes, pack.code in inProgressCodes,
                 onDownload = { coroutineScope.launch { LanguageModelManager.downloadPacks(setOf(pack.code), settings.wifiOnlyDownloads) } },
                 onDelete = { pendingDelete = pack })
+        }
+
+        SectionTitle(stringResource(R.string.bergamot_models_title))
+        Text(
+            text = stringResource(R.string.bergamot_models_body),
+            style = Serifu.type.bodySecondary,
+            color = c.textSecondary,
+        )
+        Spacer(Modifier.height(8.dp))
+        if (bergamotInstalled.isEmpty()) {
+            Text(
+                text = stringResource(R.string.bergamot_none_installed),
+                style = Serifu.type.caption,
+                color = c.textSecondary,
+            )
+        } else {
+            Hairline()
+            bergamotInstalled.forEachIndexed { index, model ->
+                SettingLine(
+                    label = stringResource(
+                        R.string.bergamot_model_row,
+                        model.from,
+                        model.to,
+                        model.architecture,
+                        model.sizeMb,
+                    ),
+                    value = stringResource(R.string.pack_on_phone),
+                    showChevron = false,
+                    showHairline = index < bergamotInstalled.lastIndex,
+                    onClick = { pendingBergamotDelete = model },
+                )
+            }
         }
 
         SectionTitle(stringResource(R.string.network_label))
@@ -580,9 +633,46 @@ fun BehaviourScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
 fun EngineScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val c = Serifu.colors
+    val context = LocalContext.current
+    val app = context.applicationContext as SerifuApp
+    val bergamotModels = app.bergamotModels
     val downloaded by LanguageModelManager.downloadedCodes.collectAsStateWithLifecycle()
+    val inProgress by bergamotModels.inProgressKeys.collectAsStateWithLifecycle()
+    val coroutineScope = rememberCoroutineScope()
+    var route by remember { mutableStateOf<ModelRoute?>(null) }
+    var routeError by remember { mutableStateOf<String?>(null) }
+    var downloadError by remember { mutableStateOf<String?>(null) }
+    var downloading by remember { mutableStateOf(false) }
+    val downloadFailedFallback = stringResource(R.string.engine_bergamot_download_failed)
     LaunchedEffect(Unit) { LanguageModelManager.refreshDownloaded() }
+    LaunchedEffect(settings.sourceLanguage, settings.targetLanguage, settings.bergamotVariant) {
+        routeError = null
+        downloadError = null
+        route = try {
+            bergamotModels.resolveRoute(
+                settings.sourceLanguage.tag,
+                settings.targetLanguage,
+                settings.bergamotVariant,
+            )
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (t: Throwable) {
+            routeError = t.message
+            null
+        }
+    }
     val packs = LanguageModelManager.SOURCE_PACKS + LanguageModelManager.POPULAR_TARGET_PACKS.take(1)
+    val usingApi = settings.quality == QualityMode.BEST_ONLY || settings.quality == QualityMode.BEST_PROGRESSIVE
+    val usingBergamot = !usingApi && settings.onDeviceEngine == OnDeviceEngine.BERGAMOT
+    val usingMlKit = !usingApi && settings.onDeviceEngine == OnDeviceEngine.MLKIT
+    val sourceName = settings.sourceLanguage.englishName
+    val targetLabel = targetName(settings.targetLanguage)
+    val variantLabel = if (settings.bergamotVariant == ModelVariant.LITE) {
+        stringResource(R.string.engine_bergamot_lite)
+    } else {
+        stringResource(R.string.engine_bergamot_full)
+    }
+    val routeReady = route != null && bergamotModels.isRouteReady(route!!)
 
     Column(
         Modifier
@@ -606,14 +696,28 @@ fun EngineScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Pill(
-                text = stringResource(R.string.engine_on_device),
-                selected = settings.quality == QualityMode.FAST,
-                onClick = { viewModel.update { it.copy(quality = QualityMode.FAST) } },
+                text = stringResource(R.string.engine_mlkit_pill),
+                selected = usingMlKit,
+                onClick = {
+                    viewModel.update {
+                        it.copy(quality = QualityMode.FAST, onDeviceEngine = OnDeviceEngine.MLKIT)
+                    }
+                },
+                modifier = Modifier.weight(1f),
+            )
+            Pill(
+                text = stringResource(R.string.engine_bergamot_pill),
+                selected = usingBergamot,
+                onClick = {
+                    viewModel.update {
+                        it.copy(quality = QualityMode.FAST, onDeviceEngine = OnDeviceEngine.BERGAMOT)
+                    }
+                },
                 modifier = Modifier.weight(1f),
             )
             Pill(
                 text = stringResource(R.string.engine_api),
-                selected = settings.quality == QualityMode.BEST_ONLY || settings.quality == QualityMode.BEST_PROGRESSIVE,
+                selected = usingApi,
                 onClick = { viewModel.update { it.copy(quality = QualityMode.BEST_ONLY) } },
                 modifier = Modifier.weight(1f),
             )
@@ -621,12 +725,146 @@ fun EngineScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
         Spacer(Modifier.height(8.dp))
         Text(
             text = stringResource(
-                if (settings.quality == QualityMode.FAST) R.string.engine_on_device_desc
-                else R.string.engine_api_desc,
+                when {
+                    usingBergamot -> R.string.engine_bergamot_desc
+                    usingApi -> R.string.engine_api_desc
+                    else -> R.string.engine_mlkit_desc
+                },
             ),
             style = Serifu.type.caption,
             color = c.textSecondary,
         )
+
+        if (usingBergamot) {
+            SectionTitle(stringResource(R.string.engine_bergamot_size_label))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Pill(
+                    text = stringResource(R.string.engine_bergamot_lite),
+                    selected = settings.bergamotVariant == ModelVariant.LITE,
+                    onClick = { viewModel.update { it.copy(bergamotVariant = ModelVariant.LITE) } },
+                    modifier = Modifier.weight(1f),
+                )
+                Pill(
+                    text = stringResource(R.string.engine_bergamot_full),
+                    selected = settings.bergamotVariant == ModelVariant.FULL,
+                    onClick = { viewModel.update { it.copy(bergamotVariant = ModelVariant.FULL) } },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            val sizeMb = route?.sizeMb ?: 0
+            Text(
+                text = stringResource(
+                    if (settings.bergamotVariant == ModelVariant.LITE) {
+                        R.string.engine_bergamot_lite_desc
+                    } else {
+                        R.string.engine_bergamot_full_desc
+                    },
+                    sizeMb.coerceAtLeast(1),
+                ),
+                style = Serifu.type.caption,
+                color = c.textSecondary,
+            )
+            if (!BergamotNative.available) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = stringResource(R.string.engine_bergamot_native_missing),
+                    style = Serifu.type.caption,
+                    color = c.primaryText,
+                )
+            } else if (route == null) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = routeError ?: stringResource(R.string.engine_bergamot_unsupported, sourceName, targetLabel),
+                    style = Serifu.type.caption,
+                    color = c.primaryText,
+                )
+            } else {
+                val routeArch = when (val r = route) {
+                    is ModelRoute.Direct -> r.model.architecture
+                    is ModelRoute.Pivot -> r.first.architecture
+                    null -> null
+                }
+                val archMismatchMessage = when {
+                    settings.bergamotVariant == ModelVariant.FULL && routeArch == "tiny" ->
+                        stringResource(R.string.engine_bergamot_full_unavailable, sourceName, targetLabel)
+                    settings.bergamotVariant == ModelVariant.LITE && routeArch != null && routeArch != "tiny" ->
+                        stringResource(R.string.engine_bergamot_lite_unavailable, sourceName, targetLabel)
+                    else -> null
+                }
+                if (archMismatchMessage != null) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = archMismatchMessage,
+                        style = Serifu.type.caption,
+                        color = c.textSecondary,
+                    )
+                }
+                if (routeReady) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = stringResource(R.string.engine_bergamot_ready, sourceName, targetLabel),
+                        style = Serifu.type.caption,
+                        color = c.primaryText,
+                    )
+                } else {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = stringResource(R.string.engine_bergamot_fallback),
+                        style = Serifu.type.caption,
+                        color = c.textSecondary,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    ActionButton(
+                        text = stringResource(
+                            R.string.engine_bergamot_download,
+                            sourceName,
+                            targetLabel,
+                            variantLabel,
+                            route!!.sizeMb,
+                        ),
+                        enabled = !downloading && inProgress.isEmpty(),
+                        onClick = {
+                            val toDownload = route ?: return@ActionButton
+                            downloading = true
+                            downloadError = null
+                            coroutineScope.launch {
+                                try {
+                                    bergamotModels.downloadRoute(toDownload, settings.wifiOnlyDownloads)
+                                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                                    throw cancelled
+                                } catch (t: Throwable) {
+                                    android.util.Log.e("EngineScreen", "Bergamot download failed", t)
+                                    downloadError = t.localizedMessage?.takeIf { it.isNotBlank() }
+                                        ?: downloadFailedFallback
+                                } finally {
+                                    downloading = false
+                                }
+                            }
+                        },
+                    )
+                }
+                if (downloading || inProgress.isNotEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = stringResource(R.string.pack_downloading),
+                        style = Serifu.type.caption,
+                        color = c.primaryText,
+                    )
+                }
+                downloadError?.let { message ->
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = message,
+                        style = Serifu.type.caption,
+                        color = c.primaryText,
+                    )
+                }
+            }
+        }
 
         SectionTitle(stringResource(R.string.engine_api_title))
         Text(
@@ -645,7 +883,6 @@ fun EngineScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
         var localEndpoint by rememberSaveable { mutableStateOf(settings.aiEndpoint) }
         var showPassword by remember { mutableStateOf(false) }
 
-        // Sync from external settings updates only when user is not actively typing
         LaunchedEffect(settings.aiApiKey) {
             if (!keyFocus) localKey = settings.aiApiKey
         }
@@ -656,7 +893,6 @@ fun EngineScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
             if (!endpointFocus) localEndpoint = settings.aiEndpoint
         }
 
-        // Debounce DataStore writes to avoid disk I/O churn and cursor jitter
         LaunchedEffect(localKey) {
             delay(300)
             if (localKey != settings.aiApiKey) {
@@ -915,6 +1151,12 @@ fun DebugScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
             color = c.textSecondary,
             modifier = Modifier.padding(vertical = 2.dp),
         )
+        Text(
+            text = stringResource(R.string.timing_bergamot, timings.translateBergamotMs),
+            style = Serifu.type.monoSmall,
+            color = c.textSecondary,
+            modifier = Modifier.padding(vertical = 2.dp),
+        )
         if (timings.selfDiscarded > 0) {
             Text(
                 text = stringResource(R.string.timing_self, timings.selfDiscarded),
@@ -1041,5 +1283,7 @@ private fun licenseLabel(file: String): String = when (file) {
     "OFL-DelaGothicOne.txt" -> "Dela Gothic One"
     "OFL-PatrickHand.txt" -> "Patrick Hand"
     "mlkit-terms.txt" -> "ML Kit"
+    "bergamot-mpl-2.0.txt" -> "Bergamot Translator (MPL-2.0)"
+    "mozilla-translation-models.txt" -> "Mozilla Translation Models"
     else -> file.substringBeforeLast('.')
 }

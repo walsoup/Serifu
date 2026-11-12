@@ -1,6 +1,5 @@
 package app.walsoup.serifu.ml
 
-import android.icu.text.Transliterator
 import android.os.SystemClock
 import app.serifu.core.Tuning
 import app.serifu.core.model.BubbleKind
@@ -18,11 +17,7 @@ import com.google.mlkit.nl.translate.TranslateRemoteModel
 import com.google.mlkit.nl.translate.Translation
 import com.google.mlkit.nl.translate.Translator
 import com.google.mlkit.nl.translate.TranslatorOptions
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.tasks.await
-import java.util.Locale
 
 class TranslationUnavailable(val languageName: String) : RuntimeException(languageName)
 
@@ -59,7 +54,7 @@ class MlKitTranslationEngine(
         for (bubble in request.bubbles) {
             if (bubble.text.isBlank()) continue
             if (bubble.kind == BubbleKind.SFX) {
-                translated[bubble.id] = romanize(bubble.text, request.source)
+                translated[bubble.id] = SfxRomanizer.romanize(bubble.text, request.source)
                 continue
             }
             val cached = cache.get(cache.key(id, request.target, cacheKey(request, bubble.text)))
@@ -123,21 +118,33 @@ class MlKitTranslationEngine(
                 slot.translator.translate(bubble.text).await().trim()
             }
             if (text == null) {
-                android.util.Log.w(
-                    "MlKitTranslate",
-                    "timeout ${budget}ms [${bubble.id}]: '${bubble.text}'",
-                )
+                if (app.walsoup.serifu.BuildConfig.DEBUG) {
+                    android.util.Log.w(
+                        "MlKitTranslate",
+                        "timeout ${budget}ms [${bubble.id}]: '${bubble.text}'",
+                    )
+                } else {
+                    android.util.Log.w("MlKitTranslate", "timeout ${budget}ms [${bubble.id}]")
+                }
                 Attempt(bubble.id, bubble.text, cacheable = false)
             } else {
                 slot.warm = true
                 slot.usedAt = clock()
-                android.util.Log.d("MlKitTranslate", "Translated [${bubble.id}]: '${bubble.text}' -> '$text'")
+                if (app.walsoup.serifu.BuildConfig.DEBUG) {
+                    android.util.Log.d("MlKitTranslate", "Translated [${bubble.id}]: '${bubble.text}' -> '$text'")
+                } else {
+                    android.util.Log.d("MlKitTranslate", "Translated [${bubble.id}]: ${bubble.text.length} chars -> ${text.length} chars")
+                }
                 Attempt(bubble.id, text, cacheable = true)
             }
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
             throw cancelled
         } catch (t: Throwable) {
-            android.util.Log.w("MlKitTranslate", "Failed translating bubble ${bubble.id}: '${bubble.text}'", t)
+            if (app.walsoup.serifu.BuildConfig.DEBUG) {
+                android.util.Log.w("MlKitTranslate", "Failed translating bubble ${bubble.id}: '${bubble.text}'", t)
+            } else {
+                android.util.Log.w("MlKitTranslate", "Failed translating bubble ${bubble.id}", t)
+            }
             Attempt(bubble.id, bubble.text, cacheable = false)
         }
     }
@@ -160,22 +167,6 @@ class MlKitTranslationEngine(
 
     private fun cacheKey(request: PageTranslationRequest, text: String): String =
         "${request.source.tag}|$text"
-
-    private fun romanize(text: String, source: SourceLanguage): String {
-        val id = when (source) {
-            SourceLanguage.JA -> "Katakana-Latin; Hiragana-Latin"
-            SourceLanguage.KO -> "Hangul-Latin"
-            SourceLanguage.ZH -> "Han-Latin"
-            else -> null
-        }
-        if (id == null) return text.uppercase(Locale.ENGLISH)
-        val latin = try {
-            Transliterator.getInstance(id).transliterate(text)
-        } catch (_: IllegalArgumentException) {
-            text
-        }
-        return latin.uppercase(Locale.ENGLISH)
-    }
 
     private fun languageCode(source: SourceLanguage): String =
         TranslateLanguage.fromLanguageTag(source.tag) ?: TranslateLanguage.ENGLISH

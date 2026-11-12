@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.walsoup.serifu.R
 import app.walsoup.serifu.SerifuApp
+import app.serifu.core.model.OnDeviceEngine
 import app.serifu.core.model.QualityMode
 import app.serifu.core.model.SourceLanguage
 import app.serifu.core.model.TriggerMode
@@ -215,7 +216,10 @@ fun HomeScreen(viewModel: HomeViewModel, onNavigate: (String) -> Unit) {
                 onClick = { onNavigate(Routes.Behaviour) },
             )
             val engineValue = when (settings.quality) {
-                QualityMode.FAST -> stringResource(R.string.engine_on_device)
+                QualityMode.FAST -> when (settings.onDeviceEngine) {
+                    OnDeviceEngine.BERGAMOT -> stringResource(R.string.engine_on_device_bergamot)
+                    OnDeviceEngine.MLKIT -> stringResource(R.string.engine_on_device_mlkit)
+                }
                 QualityMode.BEST_PROGRESSIVE, QualityMode.BEST_ONLY -> stringResource(R.string.engine_api)
             }
             SettingLine(

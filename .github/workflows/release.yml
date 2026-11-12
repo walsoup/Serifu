@@ -11,6 +11,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -18,6 +20,27 @@ jobs:
           distribution: temurin
           java-version: '17'
           cache: gradle
+
+      - name: Set up Android NDK
+        uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: r28
+          link-to-sdk: true
+
+      - name: Get Bergamot submodule commit
+        id: bergamot-submodule
+        run: echo "sha=$(git submodule status third_party/bergamot-translator | awk '{print $1}' | tr -d '+-')" >> $GITHUB_OUTPUT
+
+      - name: Cache native build
+        uses: actions/cache@v4
+        with:
+          path: |
+            bergamot/.cxx
+            bergamot/build
+          key: bergamot-cxx-${{ runner.os }}-${{ steps.bergamot-submodule.outputs.sha }}-${{ hashFiles('bergamot/src/main/cpp/**', 'third_party/bergamot-translator/**/CMakeLists.txt') }}
+          restore-keys: |
+            bergamot-cxx-${{ runner.os }}-
 
       - name: Accept Android SDK licenses
         run: yes | sdkmanager --licenses >/dev/null || true
@@ -30,7 +53,26 @@ jobs:
           # Fail closed: the decoded keystore must be the backed-up Serifu release key.
           echo "29e0ffdc6be96187fcf78a8422b8acd842c3180c6f400a7236ce5f3443f9c50c  signing/serifu-release.jks" | sha256sum -c -
 
+      - name: Run unit tests
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: |
+          chmod +x gradlew
+          ./gradlew :core:test :app:testDebugUnitTest --no-daemon
+
+      - name: Upload test results on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-test-results
+          path: |
+            core/build/reports/tests/
+            app/build/reports/tests/
+          if-no-files-found: ignore
+
       - name: Build release APK
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
         run: |
           chmod +x gradlew
           ./gradlew :app:assembleRelease --no-daemon

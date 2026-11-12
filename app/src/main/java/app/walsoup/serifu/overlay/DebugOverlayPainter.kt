@@ -138,6 +138,7 @@ class DebugOverlayPainter {
             "ocr: ${timings.ocrMs}ms",
             "cluster: ${timings.clusterMs}ms",
             "translate(mlkit): ${timings.translateMlKitMs}ms",
+            "translate(bergamot): ${timings.translateBergamotMs}ms",
             "layout: ${timings.layoutMs}ms",
             "total: ${timings.totalMs}ms",
             "cache: ${timings.cacheResult.ifEmpty { "miss" }}",

@@ -8,14 +8,16 @@ import app.serifu.core.Tuning
 import app.serifu.core.geometry.IntRect
 import app.serifu.core.translate.BubbleText
 import app.serifu.core.translate.CharBudget
+import app.serifu.core.translate.EngineId
 import app.serifu.core.translate.PageTranslationRequest
+import app.serifu.core.translate.PageTranslationResult
+import app.serifu.core.translate.TranslationEngine
 import app.serifu.core.vision.ClusterConfig
 import app.serifu.core.vision.ClusterOutcome
 import app.serifu.core.vision.OcrLine
 import app.serifu.core.vision.SpeechBubbleCluster
 import app.serifu.core.vision.SpeechBubbleClusterer
 import app.serifu.core.vision.VisionInputs
-import app.walsoup.serifu.ml.MlKitTranslationEngine
 import app.walsoup.serifu.ml.OcrEngine
 import app.walsoup.serifu.ml.VerticalRetiler
 import app.walsoup.serifu.ml.RemoteAiTranslationEngine
@@ -26,7 +28,7 @@ import kotlin.math.roundToInt
 
 class PagePipeline(
     context: Context,
-    private val translator: MlKitTranslationEngine,
+    private val translator: TranslationEngine,
     private val renderer: LetteringRenderer,
     private val ocr: OcrEngine,
     private val retiler: VerticalRetiler = VerticalRetiler(),
@@ -44,6 +46,8 @@ class PagePipeline(
         val request: PageTranslationRequest? = null,
         val clusters: List<SpeechBubbleCluster> = emptyList(),
         val retiled: List<OcrLine> = emptyList(),
+        val translateBergamotMs: Long = 0,
+        val engine: EngineId = EngineId.MLKIT,
     )
 
     fun hasAiConfigured(settings: Settings): Boolean =
@@ -132,6 +136,7 @@ class PagePipeline(
 
         val useAiOnly = settings.quality == app.serifu.core.model.QualityMode.BEST_ONLY && hasAiConfigured(settings)
         var translateMlKitMs = 0L
+        var translateBergamotMs = 0L
         var translateAiMs = 0L
 
         val translated = if (useAiOnly) {
@@ -142,23 +147,23 @@ class PagePipeline(
                 res
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 if (cancelled !is kotlinx.coroutines.TimeoutCancellationException) throw cancelled
-                android.util.Log.w("Serifu", "Remote AI translation timed out in BEST_ONLY, falling back to ML Kit", cancelled)
-                val mlStart = now()
-                val res = translator.translatePage(request)
-                translateMlKitMs = now() - mlStart
-                res
+                android.util.Log.w("Serifu", "Remote AI translation timed out in BEST_ONLY, falling back to on-device", cancelled)
+                timedOnDevice(request, now).also { (res, ml, berg) ->
+                    translateMlKitMs = ml
+                    translateBergamotMs = berg
+                }.first
             } catch (t: Throwable) {
-                android.util.Log.w("Serifu", "Remote AI translation failed in BEST_ONLY, falling back to ML Kit", t)
-                val mlStart = now()
-                val res = translator.translatePage(request)
-                translateMlKitMs = now() - mlStart
-                res
+                android.util.Log.w("Serifu", "Remote AI translation failed in BEST_ONLY, falling back to on-device", t)
+                timedOnDevice(request, now).also { (_, ml, berg) ->
+                    translateMlKitMs = ml
+                    translateBergamotMs = berg
+                }.first
             }
         } else {
-            val mlStart = now()
-            val res = translator.translatePage(request)
-            translateMlKitMs = now() - mlStart
-            res
+            timedOnDevice(request, now).also { (_, ml, berg) ->
+                translateMlKitMs = ml
+                translateBergamotMs = berg
+            }.first
         }
 
         val translatedAt = now()
@@ -185,7 +190,22 @@ class PagePipeline(
             request = request,
             clusters = clusters,
             retiled = retiled,
+            translateBergamotMs = translateBergamotMs,
+            engine = translated.engine,
         )
+    }
+
+    private suspend fun timedOnDevice(
+        request: PageTranslationRequest,
+        now: () -> Long,
+    ): Triple<PageTranslationResult, Long, Long> {
+        val started = now()
+        val res = translator.translatePage(request)
+        val elapsed = now() - started
+        return when (res.engine) {
+            EngineId.BERGAMOT -> Triple(res, 0L, elapsed)
+            else -> Triple(res, elapsed, 0L)
+        }
     }
 
     private fun dp(value: Float): Int =

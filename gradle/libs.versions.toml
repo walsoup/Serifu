@@ -18,6 +18,7 @@ espresso = "3.7.0"
 uiautomator = "2.4.0"
 mlkitOcr = "16.0.1"
 mlkitTranslate = "17.0.3"
+zstdJni = "1.5.6-9"
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activity" }
@@ -54,6 +55,7 @@ mlkit-ocr-zh = { group = "com.google.mlkit", name = "text-recognition-chinese", 
 mlkit-ocr-ko = { group = "com.google.mlkit", name = "text-recognition-korean", version.ref = "mlkitOcr" }
 mlkit-ocr-latin = { group = "com.google.mlkit", name = "text-recognition", version.ref = "mlkitOcr" }
 mlkit-translate = { group = "com.google.mlkit", name = "translate", version.ref = "mlkitTranslate" }
+zstd-jni = { group = "com.github.luben", name = "zstd-jni", version.ref = "zstdJni" }
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-library = { id = "com.android.library", version.ref = "agp" }

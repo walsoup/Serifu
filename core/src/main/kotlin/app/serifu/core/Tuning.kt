@@ -140,6 +140,19 @@ object Tuning {
      */
     const val MLKIT_TRANSLATE_COLD_TIMEOUT_MS = 90_000L
     const val AI_REMOTE_TIMEOUT_MS = 30_000L
+
+    /** Bergamot decode config. Beam 1 + int8 keeps page latency low. */
+    const val BERGAMOT_BEAM_SIZE = 1
+    const val BERGAMOT_MAX_LENGTH_BREAK = 128
+    const val BERGAMOT_MINI_BATCH_WORDS = 1024
+    const val BERGAMOT_WORKSPACE_MB = 128
+    const val BERGAMOT_MAX_LENGTH_FACTOR = 2.0
+    const val BERGAMOT_GEMM_PRECISION = "int8shiftAlphaAll"
+    const val BERGAMOT_CATALOG_CACHE_MS = 6 * 60 * 60 * 1000L
+    const val BERGAMOT_DOWNLOAD_TIMEOUT_MS = 120_000L
+    const val BERGAMOT_TRANSLATE_TIMEOUT_MS = 30_000L
+    const val BERGAMOT_LOAD_TIMEOUT_MS = 90_000L
+    const val BERGAMOT_PIVOT_LANGUAGE = "en"
     const val EMPTY_PAGE_RETRY_WINDOW_MS = 3_000L
     const val EMPTY_PAGE_RETRY_MAX = 2
     const val EMPTY_PAGE_RETRY_FIRST_MS = 800L

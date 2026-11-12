@@ -19,4 +19,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "Serifu"
-include(":app", ":core", ":linen")
+include(":app", ":core", ":linen", ":bergamot")

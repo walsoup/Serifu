@@ -2,6 +2,8 @@ package app.walsoup.serifu.settings
 
 import app.serifu.core.Tuning
 import app.serifu.core.model.LetteringFont
+import app.serifu.core.model.ModelVariant
+import app.serifu.core.model.OnDeviceEngine
 import app.serifu.core.model.PillSide
 import app.serifu.core.model.QualityMode
 import app.serifu.core.model.ReasoningEffort
@@ -14,6 +16,8 @@ data class Settings(
     val sourceLanguage: SourceLanguage = SourceLanguage.JA,
     val targetLanguage: String = "en",
     val quality: QualityMode = QualityMode.FAST,
+    val onDeviceEngine: OnDeviceEngine = OnDeviceEngine.MLKIT,
+    val bergamotVariant: ModelVariant = ModelVariant.LITE,
     val settleDelayMs: Int = Tuning.SETTLE_DELAY_DEFAULT_MS,
     val readerPackages: Set<String> = emptySet(),
     val letteringFont: LetteringFont = LetteringFont.COMIC_NEUE,

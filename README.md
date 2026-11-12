@@ -7,8 +7,8 @@
 Serifu translates manga, manhua, and manhwa on an Android phone. It screenshots a reader you choose, finds the bubbles, and draws English over them.
 
 - Japanese, Chinese, and Korean, plus Latin-script sources (English, French, Spanish, German, Italian, Portuguese)
-- On-device translation with ML Kit, or an optional OpenAI-compatible cloud backend
-- One-time language pack download of about 30 MB
+- On-device translation with ML Kit or Mozilla Bergamot (Lite/Full models), or an optional OpenAI-compatible cloud backend
+- One-time language pack download (ML Kit ~30 MB per language; Bergamot ~20–55 MB per pair)
 
 This tree is version 0.6.7-beta, with `applicationId` `app.walsoup.serifu` and `minSdk` 30.
 
@@ -42,7 +42,7 @@ The rest of the settings sit on the home screen, under the trigger.
 | Lettering | Font, size range, sound effects (compact, cover, or off). A fresh install uses 9-22 sp. |
 | Reader apps | Packages Serifu is allowed to screenshot |
 | Behaviour | How long Auto waits after the last scroll (default 450 ms), plus honorifics and the pill |
-| Engine | On-device ML Kit, or an OpenAI-compatible API endpoint |
+| Engine | On-device ML Kit, on-device Bergamot (Lite/Full), or an OpenAI-compatible API endpoint |
 | Debug | Region outlines and the reasoning level sent to the API engine |
 | About | Version and the OFL font licences |
 
@@ -71,7 +71,7 @@ Over a chosen reader, a pill sits on the screen edge. A tap translates the curre
 
 Three Gradle modules: `:core` (plain Kotlin, no Android imports), `:app` (the phone), and `:linen` (the design system the screens are built on). Serifu paints with its own palette: paper `#F3EEE3`, ink `#16140F`, hanko `#C8322B`.
 
-- **Translation** lives behind `TranslationEngine` in `:core`. On-device uses ML Kit; the optional cloud backend posts the page's bubbles to your endpoint and keeps those replies in an in-memory cache for the session.
+- **Translation** lives behind `TranslationEngine` in `:core`. On-device can use ML Kit or Bergamot (`:bergamot` NDK module + Mozilla model packs); Bergamot falls back to ML Kit until its pair is downloaded. The optional cloud backend posts the page's bubbles to your endpoint and keeps those replies in an in-memory cache for the session.
 - **Page flow** is one pipeline: split the page, cluster the bubbles, OCR, translate, letter. The accessibility service and the sample page both run it.
 - **The reading loop** is a reducer. Accessibility callbacks become events; the reducer returns the next state plus effects like capture, process, show page, or move the pill.
 
@@ -86,7 +86,15 @@ The JVM tests cover bubble detection and cleanup, lettering fit, the translation
 
 ## Build
 
-The debug build needs JDK 17. `./gradlew :app:assembleDebug` writes the debug APK.
+Needs JDK 17 and the Android NDK (r28). Clone with submodules:
+
+```
+git clone --recurse-submodules https://github.com/walsoup/Serifu.git
+# or, after a plain clone:
+git submodule update --init --recursive
+```
+
+`./gradlew :app:assembleDebug` writes the debug APK. The first build compiles Bergamot from source and is slow; later builds reuse `.cxx`.
 
 ## Licenses
 
@@ -94,6 +102,7 @@ Serifu's own code is source-available under the PolyForm Noncommercial License 1
 
 - `linen/` is the Linen design system, all rights reserved (see `linen/LICENSE`).
 - The lettering fonts are under the SIL Open Font License (see `app/src/main/assets/licenses/`).
+- Bergamot Translator and Mozilla Firefox Translations models are under the Mozilla Public License 2.0 (see `app/src/main/assets/licenses/` and `third_party/bergamot-translator/`).
 - The bundled sample manga is *Give My Regards to Black Jack* (ブラックジャックによろしく) by SHUHO SATO (佐藤秀峰), used under the author's secondary-use terms (<https://densho810.com/free/>), not under the app's license.
 
 ## Status

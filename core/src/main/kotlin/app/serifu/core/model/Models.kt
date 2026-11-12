@@ -32,6 +32,22 @@ enum class QualityMode {
     BEST_ONLY,
 }
 
+/** Which on-device translator runs when QualityMode is not API-only. */
+enum class OnDeviceEngine {
+    MLKIT,
+    BERGAMOT,
+}
+
+/**
+ * Mozilla Bergamot model size. Lite maps to architecture `tiny`; Full prefers
+ * `base-memory` then `base`. When the preferred architecture is missing for a
+ * pair, the catalog resolver falls back to the next available size.
+ */
+enum class ModelVariant {
+    LITE,
+    FULL,
+}
+
 enum class ReasoningEffort(val tag: String, val label: String) {
     NONE("none", "None"),
     AUTO("auto", "Auto"),

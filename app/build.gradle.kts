@@ -87,6 +87,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     lint {
@@ -107,6 +108,7 @@ kotlin {
 dependencies {
     implementation(project(":core"))
     implementation(project(":linen"))
+    implementation(project(":bergamot"))
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
@@ -131,6 +133,7 @@ dependencies {
     implementation(libs.mlkit.ocr.ko)
     implementation(libs.mlkit.ocr.latin)
     implementation(libs.mlkit.translate)
+    implementation(libs.zstd.jni)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlin.test)

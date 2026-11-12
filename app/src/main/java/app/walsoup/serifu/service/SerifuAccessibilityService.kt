@@ -21,8 +21,14 @@ import app.walsoup.serifu.capture.ScreenCapturer
 import app.walsoup.serifu.coordinator.PagePipeline
 import app.walsoup.serifu.coordinator.TranslationCoordinator
 import app.serifu.core.coordinator.Event
+import app.serifu.core.model.ModelVariant
+import app.serifu.core.model.OnDeviceEngine
+import app.serifu.core.model.QualityMode
+import app.walsoup.serifu.ml.BergamotModelManager
+import app.walsoup.serifu.ml.BergamotTranslationEngine
 import app.walsoup.serifu.ml.MlKitTranslationEngine
 import app.walsoup.serifu.ml.OcrEngine
+import app.walsoup.serifu.ml.OnDeviceTranslationEngine
 import app.walsoup.serifu.ml.RemoteAiTranslationEngine
 import app.walsoup.serifu.overlay.LetteringRenderer
 import app.walsoup.serifu.overlay.OverlayManager
@@ -41,7 +47,7 @@ class SerifuAccessibilityService : AccessibilityService() {
     private var sessionJob = SupervisorJob()
     private var scope = CoroutineScope(sessionJob + Dispatchers.Main.immediate)
     private var ocr = OcrEngine()
-    private lateinit var translator: MlKitTranslationEngine
+    private lateinit var translator: OnDeviceTranslationEngine
     private lateinit var capturer: ScreenCapturer
     private var loop: TranslationCoordinator? = null
     private var screenReceiver: ScreenStateReceiver? = null
@@ -67,21 +73,44 @@ class SerifuAccessibilityService : AccessibilityService() {
             ocr = OcrEngine()
             capturer = ScreenCapturer(this, overlays, FrameConverter())
         }
-        translator = MlKitTranslationEngine(
+        val bergamotModels = app.bergamotModels
+        val mlKit = MlKitTranslationEngine(
             // Null means the store has not emitted yet. The default is to allow
             // mobile data; only an explicit opt-in should wait for Wi-Fi.
             wifiOnly = { app.settingsRepository.settings.value?.wifiOnlyDownloads == true },
         )
+        val bergamot = BergamotTranslationEngine(
+            models = bergamotModels,
+            variant = { app.settingsRepository.settings.value?.bergamotVariant ?: ModelVariant.LITE },
+        )
+        translator = OnDeviceTranslationEngine(
+            mlKit = mlKit,
+            bergamot = bergamot,
+            models = bergamotModels,
+            preferred = {
+                app.settingsRepository.settings.value?.onDeviceEngine
+                    ?: OnDeviceEngine.MLKIT
+            },
+            variant = {
+                app.settingsRepository.settings.value?.bergamotVariant
+                    ?: ModelVariant.LITE
+            },
+            quality = {
+                app.settingsRepository.settings.value?.quality
+                    ?: QualityMode.FAST
+            },
+        )
         val remoteAi = RemoteAiTranslationEngine(
             settingsProvider = { app.settingsRepository.settings.value ?: SerifuSettings() },
         )
+        val pagePipeline = PagePipeline(this, translator, LetteringRenderer(this), ocr, remoteAi = remoteAi)
         val reading = TranslationCoordinator(
             scope = scope,
             context = this,
             overlays = overlays,
             capturer = capturer,
             ocr = ocr,
-            pipeline = PagePipeline(this, translator, LetteringRenderer(this), ocr, remoteAi = remoteAi),
+            pipeline = pagePipeline,
             presence = { app.readerPresence.value },
             writeSettings = { transform ->
                 scope.launch { app.settingsRepository.update(transform) }
@@ -95,13 +124,25 @@ class SerifuAccessibilityService : AccessibilityService() {
             },
             notifyPermissionLost = ::notifyPermissionLost,
             publishTimings = { app.pipelineTimings.value = it },
+            resolveEngineId = { settings ->
+                translator.resolveEngineId(settings.sourceLanguage, settings.targetLanguage)
+            },
         )
         reading.start()
         loop = reading
         overlays.events = reading
         overlays.attach()
         scope.launch {
-            app.settingsRepository.settings.filterNotNull().collect { reading.pushSettings(it) }
+            app.settingsRepository.settings.filterNotNull().collect { settings ->
+                reading.pushSettings(settings)
+                val isAiOnly = settings.quality == QualityMode.BEST_ONLY &&
+                    pagePipeline.hasAiConfigured(settings)
+                if (!isAiOnly) {
+                    runCatching {
+                        translator.prewarm(settings.sourceLanguage, settings.targetLanguage)
+                    }
+                }
+            }
         }
         scope.launch {
             app.readerPresence.collect { presence ->
@@ -237,7 +278,7 @@ class SerifuAccessibilityService : AccessibilityService() {
             ocr.close()
             ocr = OcrEngine()
             if (::translator.isInitialized) {
-                translator.close()
+                translator.trimMemory()
             }
         }
     }

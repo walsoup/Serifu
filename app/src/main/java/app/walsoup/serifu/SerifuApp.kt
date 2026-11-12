@@ -2,6 +2,7 @@ package app.walsoup.serifu
 
 import android.app.Application
 import app.walsoup.serifu.debug.PipelineTimings
+import app.walsoup.serifu.ml.BergamotModelManager
 import app.walsoup.serifu.service.EventRouter
 import app.walsoup.serifu.settings.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
@@ -21,6 +22,8 @@ class SerifuApp : Application() {
     val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     lateinit var settingsRepository: SettingsRepository
         private set
+    lateinit var bergamotModels: BergamotModelManager
+        private set
     val readerPresence = MutableStateFlow(EventRouter.State())
     val pipelineTimings = MutableStateFlow(PipelineTimings())
     val isServiceActive = MutableStateFlow(false)
@@ -28,6 +31,7 @@ class SerifuApp : Application() {
     override fun onCreate() {
         super.onCreate()
         settingsRepository = SettingsRepository(this, appScope)
+        bergamotModels = BergamotModelManager(this)
         checkAccessibilityService()
     }
 
