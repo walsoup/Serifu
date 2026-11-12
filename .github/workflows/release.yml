@@ -25,7 +25,7 @@ jobs:
         uses: nttld/setup-ndk@v1
         id: setup-ndk
         with:
-          ndk-version: '28.0.13004108'
+          ndk-version: r28
           link-to-sdk: true
 
       - name: Get Bergamot submodule commit
