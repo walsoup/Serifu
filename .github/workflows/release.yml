@@ -2,6 +2,9 @@ name: Release build
 
 on:
   workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
 
 permissions:
   contents: write
@@ -90,45 +93,72 @@ jobs:
           echo "apk signer digest:    $ACTUAL"
           test -n "$EXPECTED" && test -n "$ACTUAL" && test "$EXPECTED" = "$ACTUAL" || { echo "::error::APK signer does not match the Serifu release keystore"; exit 1; }
 
+      - name: Resolve version and tag
+        id: versioning
+        run: |
+          VERSION=$(grep -o 'versionName = "[^"]*"' app/build.gradle.kts | cut -d'"' -f2)
+          if [ -z "$VERSION" ]; then
+            echo "::error::Could not determine versionName from app/build.gradle.kts"
+            exit 1
+          fi
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            TAG="${{ github.ref_name }}"
+          else
+            TAG="v${VERSION}"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "apk_name=serifu-${VERSION}.apk" >> $GITHUB_OUTPUT
+          echo "Resolved version: ${VERSION}, tag: ${TAG}"
+
       - name: Stage APK
         run: |
           APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
-          cp "$APK" serifu-0.6.7-beta.apk
-          ls -la serifu-0.6.7-beta.apk
+          cp "$APK" "${{ steps.versioning.outputs.apk_name }}"
+          ls -la "${{ steps.versioning.outputs.apk_name }}"
 
       - name: Upload release APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: serifu-release-apk
-          path: serifu-0.6.7-beta.apk
+          path: ${{ steps.versioning.outputs.apk_name }}
           if-no-files-found: error
 
       - name: Create draft release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.versioning.outputs.tag }}
+          VERSION: ${{ steps.versioning.outputs.version }}
+          APK_NAME: ${{ steps.versioning.outputs.apk_name }}
         run: |
-          cat > /tmp/notes.md <<'NOTES'
-          First public beta of Serifu.
+          cat > /tmp/notes.md <<NOTES
+          ### Serifu ${VERSION}
 
           Serifu translates manga, manhua, and manhwa in place on your phone. It screenshots a reader app you choose, finds the speech bubbles, and draws English over them.
 
           - Japanese, Chinese, and Korean, plus Latin-script sources (English, French, Spanish, German, Italian, Portuguese)
-          - On-device translation with ML Kit, or an optional OpenAI-compatible cloud backend
+          - On-device translation with ML Kit or Mozilla Bergamot offline models, plus optional OpenAI-compatible cloud backend
           - Auto and manual translate triggers, with a floating HUD over your reader
 
           ## Install
 
-          1. Download `serifu-0.6.7-beta.apk` below. Requires Android 11 or newer on an arm64 phone.
+          1. Download \`${APK_NAME}\` below. Requires Android 11 or newer on an arm64 phone.
           2. Allow installing from this source when Android asks.
           3. On first launch, grant the restricted settings Android requires for sideloaded accessibility apps, then enable Serifu's accessibility service.
 
-          A one-time language pack download of about 30 MB runs on first use.
+          One-time language pack download: ML Kit ~30 MB per language; Bergamot ~20–55 MB per pair.
 
-          Beta: OCR and lettering may still change between releases. If you installed an earlier debug build, Android may refuse to install over it because the signatures differ. Uninstalling the old build fixes that, but it deletes Serifu's saved settings, so check the app for anything you want to keep first.
+          Preview / Beta: OCR and lettering may still change between releases. If you installed an earlier build, Android may refuse to install over it because signatures differ; uninstalling the old build resolves this.
           NOTES
-          if gh release view 0.6.7-beta >/dev/null 2>&1; then
-            gh release upload 0.6.7-beta serifu-0.6.7-beta.apk --clobber
-            gh release edit 0.6.7-beta --draft --title "Serifu 0.6.7-beta" --notes-file /tmp/notes.md
+
+          PRERELEASE_FLAG=""
+          if echo "$VERSION" | grep -Eq "alpha|beta|rc|preview"; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$APK_NAME" --clobber
+            gh release edit "$TAG" --draft $PRERELEASE_FLAG --title "Serifu ${TAG}" --notes-file /tmp/notes.md
           else
-            gh release create 0.6.7-beta --draft --title "Serifu 0.6.7-beta" --notes-file /tmp/notes.md serifu-0.6.7-beta.apk
+            gh release create "$TAG" --draft $PRERELEASE_FLAG --title "Serifu ${TAG}" --notes-file /tmp/notes.md "$APK_NAME"
           fi
