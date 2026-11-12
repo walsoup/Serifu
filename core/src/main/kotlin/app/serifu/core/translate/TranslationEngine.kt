@@ -6,6 +6,7 @@ import app.serifu.core.model.SourceLanguage
 
 enum class EngineId {
     MLKIT,
+    BERGAMOT,
     GEMMA4_E2B,
     AI_REMOTE,
 }

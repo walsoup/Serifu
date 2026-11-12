@@ -3,6 +3,8 @@ package app.walsoup.serifu.settings
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.mutablePreferencesOf
 import app.serifu.core.model.LetteringFont
+import app.serifu.core.model.ModelVariant
+import app.serifu.core.model.OnDeviceEngine
 import app.serifu.core.model.PillSide
 import app.serifu.core.model.QualityMode
 import app.serifu.core.model.ReasoningEffort
@@ -44,6 +46,8 @@ class SettingsCodecTest {
             aiModel = "gemini-1.5-flash",
             aiEndpoint = "https://custom.endpoint.com/v1",
             reasoningEffort = ReasoningEffort.LOW,
+            onDeviceEngine = OnDeviceEngine.BERGAMOT,
+            bergamotVariant = ModelVariant.FULL,
         )
         val prefs = mutablePreferencesOf()
         original.writeTo(prefs)
@@ -51,6 +55,19 @@ class SettingsCodecTest {
             original.copy(settleDelayMs = 500),
             prefs.toSettings(defaultReaders = setOf("should-not-apply")),
         )
+    }
+
+    @Test
+    fun bergamotEngineAndVariantRoundTrip() {
+        val original = Settings(
+            onDeviceEngine = OnDeviceEngine.BERGAMOT,
+            bergamotVariant = ModelVariant.FULL,
+        )
+        val prefs = mutablePreferencesOf()
+        original.writeTo(prefs)
+        val decoded = prefs.toSettings(defaultReaders = emptySet())
+        assertEquals(OnDeviceEngine.BERGAMOT, decoded.onDeviceEngine)
+        assertEquals(ModelVariant.FULL, decoded.bergamotVariant)
     }
 
     @Test

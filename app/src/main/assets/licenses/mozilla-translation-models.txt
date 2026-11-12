@@ -1,0 +1,6 @@
+﻿Mozilla Firefox Translations models
+https://github.com/mozilla/firefox-translations-models
+
+These neural machine translation models are distributed by Mozilla under the
+Mozilla Public License 2.0 (MPL-2.0). Serifu downloads them on demand from
+Mozilla Remote Settings (translations-models-v2) for use with Bergamot.

@@ -9,6 +9,8 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import app.serifu.core.Tuning
 import app.serifu.core.model.LetteringFont
+import app.serifu.core.model.ModelVariant
+import app.serifu.core.model.OnDeviceEngine
 import app.serifu.core.model.PillSide
 import app.serifu.core.model.QualityMode
 import app.serifu.core.model.ReasoningEffort
@@ -21,6 +23,8 @@ internal object SettingsKeys {
     val sourceLanguage = stringPreferencesKey("sourceLanguage")
     val targetLanguage = stringPreferencesKey("targetLanguage")
     val quality = stringPreferencesKey("quality")
+    val onDeviceEngine = stringPreferencesKey("onDeviceEngine")
+    val bergamotVariant = stringPreferencesKey("bergamotVariant")
     val settleDelayMs = intPreferencesKey("settleDelayMs")
     val readerPackages = stringSetPreferencesKey("readerPackages")
     val letteringFont = stringPreferencesKey("letteringFont")
@@ -49,6 +53,8 @@ internal fun Settings.writeTo(prefs: MutablePreferences) {
     prefs[SettingsKeys.sourceLanguage] = sourceLanguage.name
     prefs[SettingsKeys.targetLanguage] = targetLanguage
     prefs[SettingsKeys.quality] = quality.name
+    prefs[SettingsKeys.onDeviceEngine] = onDeviceEngine.name
+    prefs[SettingsKeys.bergamotVariant] = bergamotVariant.name
     prefs[SettingsKeys.settleDelayMs] = Tuning.snapSettleDelay(settleDelayMs)
     prefs[SettingsKeys.readerPackages] = readerPackages
     prefs[SettingsKeys.letteringFont] = letteringFont.name
@@ -80,6 +86,8 @@ internal fun Preferences.toSettings(defaultReaders: Set<String>): Settings {
         sourceLanguage = enumOr(this[SettingsKeys.sourceLanguage], defaults.sourceLanguage),
         targetLanguage = this[SettingsKeys.targetLanguage] ?: defaults.targetLanguage,
         quality = enumOr(this[SettingsKeys.quality], defaults.quality),
+        onDeviceEngine = enumOr(this[SettingsKeys.onDeviceEngine], defaults.onDeviceEngine),
+        bergamotVariant = enumOr(this[SettingsKeys.bergamotVariant], defaults.bergamotVariant),
         settleDelayMs = Tuning.snapSettleDelay(this[SettingsKeys.settleDelayMs] ?: defaults.settleDelayMs),
         readerPackages = this[SettingsKeys.readerPackages] ?: defaultReaders,
         letteringFont = enumOr(this[SettingsKeys.letteringFont], defaults.letteringFont),

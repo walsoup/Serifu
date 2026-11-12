@@ -16,6 +16,7 @@ class PageCache<T>(private val maxSize: Int = Tuning.PAGE_CACHE_SIZE) {
         val source: SourceLanguage,
         val target: String,
         val engine: EngineId,
+        val variant: String?,
         val value: T,
     )
 
@@ -27,12 +28,14 @@ class PageCache<T>(private val maxSize: Int = Tuning.PAGE_CACHE_SIZE) {
         source: SourceLanguage,
         target: String,
         engine: EngineId,
+        variant: String? = null,
     ): T? {
         val index = entries.indexOfFirst { entry ->
             entry.rotation == rotation &&
                 entry.source == source &&
                 entry.target == target &&
                 entry.engine == engine &&
+                entry.variant == variant &&
                 entry.fingerprint.frameWidth == fingerprint.frameWidth &&
                 entry.fingerprint.frameHeight == fingerprint.frameHeight &&
                 entry.fingerprint.isSamePage(fingerprint)
@@ -51,14 +54,26 @@ class PageCache<T>(private val maxSize: Int = Tuning.PAGE_CACHE_SIZE) {
         engine: EngineId,
         value: T,
     ) {
+        put(fingerprint, rotation, source, target, engine, null, value)
+    }
+
+    fun put(
+        fingerprint: FrameFingerprint,
+        rotation: Int,
+        source: SourceLanguage,
+        target: String,
+        engine: EngineId,
+        variant: String?,
+        value: T,
+    ) {
         entries.removeAll {
             it.rotation == rotation && it.source == source && it.target == target &&
-                it.engine == engine &&
+                it.engine == engine && it.variant == variant &&
                 it.fingerprint.frameWidth == fingerprint.frameWidth &&
                 it.fingerprint.frameHeight == fingerprint.frameHeight &&
                 it.fingerprint.isSamePage(fingerprint)
         }
-        entries.addFirst(Entry(fingerprint, rotation, source, target, engine, value))
+        entries.addFirst(Entry(fingerprint, rotation, source, target, engine, variant, value))
         while (entries.size > maxSize) entries.removeLast()
     }
 

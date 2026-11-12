@@ -63,6 +63,7 @@ class TranslationCoordinator(
     private val openApp: () -> Unit,
     private val notifyPermissionLost: () -> Unit,
     private val publishTimings: (PipelineTimings) -> Unit,
+    private val resolveEngineId: (Settings) -> EngineId = { EngineId.MLKIT },
     private val clock: () -> Long = SystemClock::uptimeMillis,
 ) : OverlayEvents {
     private val events = Channel<Event>(Channel.UNLIMITED)
@@ -135,7 +136,10 @@ class TranslationCoordinator(
             send(Event.LanguageChanged)
             signaled = true
         }
-        if (previous.quality != value.quality) {
+        if (previous.quality != value.quality ||
+            previous.onDeviceEngine != value.onDeviceEngine ||
+            previous.bergamotVariant != value.bergamotVariant
+        ) {
             send(Event.EngineChanged)
             signaled = true
         }
@@ -380,12 +384,15 @@ class TranslationCoordinator(
                 val fingerprint =
                     FrameFingerprint.of(frame.luma.tiny, frameW, frameH, topInset, bottomInset)
                 val fingerprintMs = (clock() - fpStarted).coerceAtLeast(0)
+                val engineId = expectedEngineId(settings)
+                val variant = if (engineId == EngineId.BERGAMOT) settings.bergamotVariant.name else null
                 val exact = pageCache.get(
                     fingerprint,
                     frame.rotation,
                     settings.sourceLanguage,
                     settings.targetLanguage,
-                    EngineId.MLKIT,
+                    engineId,
+                    variant,
                 )
                 if (exact != null) {
                     if (generation != state.generation) return
@@ -396,6 +403,7 @@ class TranslationCoordinator(
                         ocrMs = 0,
                         clusterMs = 0,
                         translateMlKitMs = 0,
+                        translateBergamotMs = 0,
                         translateGemmaMs = 0,
                         layoutMs = 0,
                         totalMs = (clock() - started).coerceAtLeast(0),
@@ -433,6 +441,7 @@ class TranslationCoordinator(
                                         ocrMs = 0,
                                         clusterMs = 0,
                                         translateMlKitMs = 0,
+                                        translateBergamotMs = 0,
                                         translateGemmaMs = 0,
                                         layoutMs = 0,
                                         totalMs = (clock() - started).coerceAtLeast(0),
@@ -510,6 +519,7 @@ class TranslationCoordinator(
                     ocrMs = (ocrDone - ocrStarted).coerceAtLeast(0),
                     clusterMs = lettered.clusterMs,
                     translateMlKitMs = lettered.translateMs,
+                    translateBergamotMs = lettered.translateBergamotMs,
                     translateGemmaMs = lettered.translateGemmaMs,
                     layoutMs = lettered.layoutMs,
                     totalMs = (finished - started).coerceAtLeast(0),
@@ -521,17 +531,20 @@ class TranslationCoordinator(
                 Log.d(
                     TAG,
                     "lines=${lines.size} bubbles=${page?.bubbles?.size ?: 0} ocr=${timings.ocrMs}ms " +
-                        "translateMlKit=${timings.translateMlKitMs}ms translateAi=${timings.translateGemmaMs}ms total=${timings.totalMs}ms cache=$cacheResult",
+                        "translateMlKit=${timings.translateMlKitMs}ms translateBergamot=${timings.translateBergamotMs}ms " +
+                        "translateAi=${timings.translateGemmaMs}ms total=${timings.totalMs}ms cache=$cacheResult engine=${lettered.engine}",
                 )
                 if (page == null) {
                     send(Event.PageEmpty(generation))
                 } else {
+                    val variant = if (lettered.engine == EngineId.BERGAMOT) settings.bergamotVariant.name else null
                     pageCache.put(
                         fingerprint,
                         frame.rotation,
                         settings.sourceLanguage,
                         settings.targetLanguage,
-                        EngineId.MLKIT,
+                        lettered.engine,
+                        variant,
                         page,
                     )
                     snapshotPrev(frame)
@@ -605,12 +618,14 @@ class TranslationCoordinator(
                             publishTimings(timings)
                             overlays.canvas.updateTimings(timings)
                             // Replace the base page so flipping back shows the AI translation.
+                            val variant = if (lettered.engine == EngineId.BERGAMOT) settings.bergamotVariant.name else null
                             pageCache.put(
                                 fingerprint,
                                 rotation,
                                 settings.sourceLanguage,
                                 settings.targetLanguage,
-                                EngineId.MLKIT,
+                                lettered.engine,
+                                variant,
                                 upgraded,
                             )
                             val pageId = rememberPage(upgraded)
@@ -741,6 +756,14 @@ class TranslationCoordinator(
             sourceLines = prev.sourceLines,
             debugLines = emptyList(),
         )
+    }
+
+    private fun expectedEngineId(settings: Settings): EngineId {
+        return if (settings.quality == app.serifu.core.model.QualityMode.BEST_ONLY && pipeline.hasAiConfigured(settings)) {
+            EngineId.AI_REMOTE
+        } else {
+            resolveEngineId(settings)
+        }
     }
 
     private fun takeFrame(id: Long): CapturedFrame? = synchronized(frames) { frames.remove(id) }

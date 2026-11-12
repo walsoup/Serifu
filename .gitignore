@@ -20,3 +20,6 @@ screens/
 .*/
 !.github/
 
+# Temporary files
+.tmp*
+

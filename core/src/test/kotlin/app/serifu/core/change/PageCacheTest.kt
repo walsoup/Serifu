@@ -39,6 +39,14 @@ class PageCacheTest {
     }
 
     @Test
+    fun variantMismatchIsAMiss() {
+        val cache = PageCache<String>()
+        cache.put(fpA, 0, SourceLanguage.JA, "en", EngineId.BERGAMOT, "LITE", "lite-page")
+        assertNull(cache.get(fpA, 0, SourceLanguage.JA, "en", EngineId.BERGAMOT, "FULL"))
+        assertEquals("lite-page", cache.get(fpA, 0, SourceLanguage.JA, "en", EngineId.BERGAMOT, "LITE"))
+    }
+
+    @Test
     fun rotationMismatchIsAMiss() {
         val cache = PageCache<String>()
         cache.put(fpA, 0, SourceLanguage.JA, "en", EngineId.MLKIT, "page-a")
