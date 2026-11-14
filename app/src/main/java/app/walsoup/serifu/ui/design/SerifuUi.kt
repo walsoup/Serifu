@@ -39,7 +39,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -671,5 +677,93 @@ fun ScriptCell(
         Text(glyph, style = TextStyle(fontSize = 26.sp), color = c.text)
         Spacer(Modifier.height(4.dp))
         Text(name, style = Serifu.type.overline.copy(letterSpacing = 1.sp), color = labelColor, maxLines = 1)
+    }
+}
+
+/** Flat Hanko progress bar: determinate when [progress] is non-null, smooth sliding pulse otherwise. */
+@Composable
+fun SerifuProgressBar(
+    progress: Float?,
+    modifier: Modifier = Modifier,
+    height: Dp = 4.dp,
+) {
+    val c = Serifu.colors
+    val shape = RoundedCornerShape(100)
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(height)
+            .clip(shape)
+            .background(c.inactive),
+    ) {
+        if (progress != null) {
+            val fraction = progress.coerceIn(0f, 1f)
+            Box(
+                Modifier
+                    .fillMaxWidth(fraction)
+                    .fillMaxHeight()
+                    .clip(shape)
+                    .background(c.primary),
+            )
+        } else {
+            val transition = rememberInfiniteTransition(label = "progress_indeterminate")
+            val offset by transition.animateFloat(
+                initialValue = -0.35f,
+                targetValue = 1.0f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = 1050, easing = LinearEasing),
+                    repeatMode = RepeatMode.Restart,
+                ),
+                label = "progress_slide",
+            )
+            val start = offset.coerceIn(0f, 1f)
+            val end = (offset + 0.35f).coerceIn(0f, 1f)
+            val widthFraction = (end - start).coerceAtLeast(0f)
+            if (widthFraction > 0f) {
+                Row(Modifier.fillMaxSize()) {
+                    if (start > 0f) Spacer(Modifier.weight(start))
+                    Box(
+                        Modifier
+                            .weight(widthFraction)
+                            .fillMaxHeight()
+                            .clip(shape)
+                            .background(c.primary),
+                    )
+                    val tail = 1f - end
+                    if (tail > 0f) Spacer(Modifier.weight(tail))
+                }
+            }
+        }
+    }
+}
+
+/** Compact flat tag for pack/model status (e.g. "Needed", "Ready"). */
+@Composable
+fun StatusBadge(
+    text: String,
+    highlighted: Boolean = false,
+    warning: Boolean = false,
+    modifier: Modifier = Modifier,
+) {
+    val c = Serifu.colors
+    val shape = RoundedCornerShape(6.dp)
+    val bg = if (warning || highlighted) c.surfaceAlt else c.container
+    val border = if (warning || highlighted) c.primary else c.hairline
+    val fg = if (warning || highlighted) c.primaryText else c.textSecondary
+    Box(
+        modifier = modifier
+            .clip(shape)
+            .background(bg)
+            .border(1.dp, border, shape)
+            .padding(horizontal = 8.dp, vertical = 3.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = text,
+            style = Serifu.type.monoTiny.copy(fontWeight = FontWeight.SemiBold),
+            color = fg,
+            maxLines = 1,
+            softWrap = false,
+        )
     }
 }

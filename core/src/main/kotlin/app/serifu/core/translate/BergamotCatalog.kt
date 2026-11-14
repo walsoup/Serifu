@@ -145,7 +145,7 @@ object BergamotCatalog {
             add(toFile(lex))
             addAll(vocabFiles)
         }
-        val bytes = files.sumOf { it.decompressedSize.coerceAtLeast(it.compressedSize) }
+        val bytes = files.sumOf { it.transferBytes }
         return ModelFiles(
             from = pair.from,
             to = pair.to,
@@ -265,6 +265,8 @@ data class ModelFiles(
 ) {
     val pairCode: String get() = "$from-$to"
     val sizeMb: Int get() = ((totalBytes + 512L * 1024L) / (1024L * 1024L)).toInt().coerceAtLeast(1)
+    val transferBytes: Long
+        get() = files.sumOf { it.transferBytes }
 }
 
 data class ModelFile(
@@ -277,6 +279,10 @@ data class ModelFile(
     val decompressedHash: String,
 ) {
     val url: String get() = "${BergamotCatalog.CDN_ROOT}/$location"
+
+    /** Bytes that actually cross the network. Installed files fall back to their size on disk. */
+    val transferBytes: Long
+        get() = compressedSize.takeIf { it > 0L } ?: decompressedSize
 }
 
 sealed interface ModelRoute {

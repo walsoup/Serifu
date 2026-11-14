@@ -43,7 +43,7 @@
     <string name="languages_pivot">Targets other than English pass through English inside the on-device translator.</string>
     <string name="target_label">Target</string>
     <string name="wifi_only">Download packs on Wi-Fi only</string>
-    <string name="wifi_subtitle">Download ML Kit models only over unmetered Wi-Fi</string>
+    <string name="wifi_subtitle">Only download offline models (ML Kit and Bergamot) over unmetered Wi-Fi</string>
     <string name="network_label">Network</string>
     <string name="installed_apps">Installed apps</string>
 
@@ -139,6 +139,11 @@
     <string name="ai_model_placeholder">gpt-4o-mini</string>
     <string name="ai_endpoint_label">Custom Endpoint</string>
     <string name="ai_endpoint_placeholder">https://api.openai.com/v1/chat/completions</string>
+    <string name="cd_clear_key">Clear key</string>
+    <string name="cd_show_key">Show key</string>
+    <string name="cd_hide_key">Hide key</string>
+    <string name="cd_clear_model">Clear model</string>
+    <string name="cd_clear_endpoint">Clear endpoint</string>
     <string name="ai_gemini_model_note">Gemini uses the model named in this URL. The model name field is not sent.</string>
     <string name="reasoning_effort_label">Reasoning level</string>
     <string name="reasoning_effort_desc">Lower reasoning speeds up translation. If set to None and unsupported by the model, Serifu falls back automatically.</string>
@@ -300,4 +305,96 @@
     <string name="sample_mode_stick">Stick comic</string>
     <string name="sample_blackjack_title">ブラックジャックによろしく</string>
     <string name="sample_blackjack_subtitle">第1巻 · 209P · 佐藤秀峰</string>
+
+    <!-- UX Overhaul: Model readiness, progress, errors, Home, Onboarding, Engine, Languages -->
+    <string name="wifi_required_error">An unmetered Wi-Fi or Ethernet connection is required. Connect, or use mobile data for this download.</string>
+    <string name="download_on_mobile_data">Use mobile data</string>
+    <string name="download_retry">Retry</string>
+    <string name="download_cancel">Cancel</string>
+
+    <string name="model_status_ready">Ready offline</string>
+    <string name="model_status_ready_pair">Ready offline · %1$s → %2$s</string>
+    <string name="model_status_needed">Offline pack needed</string>
+    <string name="model_status_needed_detail">%1$s → %2$s needs ~%3$d MB to translate offline.</string>
+    <string name="model_status_downloading">Downloading %1$s…</string>
+    <string name="model_status_verifying">Verifying files…</string>
+    <string name="model_status_catalog">Checking catalog…</string>
+    <string name="model_progress_bytes">%1$d / %2$d MB (%3$d%%)</string>
+    <string name="model_progress_file">File %1$d of %2$d</string>
+    <string name="model_download_now">Download now (~%1$d MB)</string>
+    <string name="model_download_pack">Download pack (~%1$d MB)</string>
+    <string name="model_bergamot_missing_short">Model not downloaded · using ML Kit</string>
+    <string name="model_bergamot_missing_detail">Download %1$s → %2$s (%3$s, ~%4$d MB) for Bergamot, or keep using ML Kit.</string>
+    <string name="model_bergamot_resolving">Checking available Bergamot models…</string>
+    <string name="model_api_unconfigured">API not configured</string>
+    <string name="model_api_unconfigured_detail">Add an API key or local endpoint to translate.</string>
+    <string name="model_api_ready">Ready · %1$s</string>
+    <string name="model_error_title">Download failed</string>
+    <string name="pack_error_generic">Download failed. Check your connection and try again.</string>
+    <string name="pack_error_wifi">Waiting for unmetered Wi-Fi or Ethernet. Connect, or use mobile data for this download.</string>
+    <string name="pack_error_timeout">Download timed out. Check your connection and retry.</string>
+    <string name="pack_error_verification">The download was corrupted and could not be verified. Try again.</string>
+
+    <string name="engine_mlkit_title">ML Kit (Fast · Offline)</string>
+    <string name="engine_bergamot_title">Bergamot (Quality · Offline)</string>
+    <string name="engine_api_title_short">API (Best · Online / Local)</string>
+    <string name="engine_api_mode_label">API mode</string>
+    <string name="engine_api_only_pill">API only</string>
+    <string name="engine_api_progressive_pill">Instant + AI</string>
+    <string name="engine_api_only_desc">Waits for the API response before drawing bubbles.</string>
+    <string name="engine_api_progressive_desc">Shows fast on-device translation immediately, then upgrades bubbles with AI.</string>
+    <string name="engine_bergamot_delete">Delete downloaded model</string>
+    <string name="engine_bergamot_installed_section">Downloaded Bergamot models</string>
+    <string name="engine_manage_all_packs">Manage all language packs</string>
+    <string name="engine_mlkit_pair_title">Active language pair</string>
+    <string name="engine_api_presets_label">Quick presets</string>
+    <string name="engine_api_preset_openai">OpenAI</string>
+    <string name="engine_api_preset_gemini">Gemini</string>
+    <string name="engine_api_preset_openrouter">OpenRouter</string>
+    <string name="engine_api_preset_ollama">Ollama (Local)</string>
+    <string name="engine_on_device_bergamot_fallback">Bergamot (using ML Kit)</string>
+    <string name="engine_on_device_api_progressive">Instant + AI</string>
+
+    <string name="target_change">Change</string>
+    <string name="target_search_placeholder">Search target languages</string>
+    <string name="target_all_languages">All %1$d languages</string>
+    <string name="target_popular_languages">Popular languages</string>
+    <string name="packs_active_pair_title">Active pair</string>
+    <string name="packs_overview_note">ML Kit downloads one pack per language (~30 MB each). Bergamot downloads pair models in Engine settings.</string>
+    <string name="packs_bergamot_cta">Download in Engine settings</string>
+    <string name="packs_needed_badge">Needed</string>
+    <string name="packs_delete_action">Remove</string>
+
+    <string name="turn_on_auto">Turn on Auto mode</string>
+    <string name="home_open_reader">Open %1$s</string>
+    <string name="home_choose_reader">Open a reader app</string>
+    <string name="home_select_readers_cta">Select reader apps</string>
+    <string name="home_configure_api_cta">Configure API engine</string>
+    <string name="home_download_pack_cta">Download offline pack (~%1$d MB)</string>
+    <string name="home_status_watching">Watching %1$d reader apps · %2$s</string>
+    <string name="home_status_watching_one">Watching %1$s · %2$s</string>
+    <string name="home_status_no_readers">No reader apps selected yet</string>
+    <string name="home_reader_picker_title">Open a reader app</string>
+    <string name="home_reader_picker_subtitle">Serifu\'s floating pill attaches automatically when you open one of these apps.</string>
+    <string name="home_pack_missing_short">Pack needed</string>
+
+    <string name="onboarding_welcome_lede_dynamic">Manga screen translator. %1$d quick steps, then you\'re ready to read.</string>
+    <string name="onboarding_target_label">Translate into</string>
+    <string name="onboarding_offline_model_title">Offline translation pack</string>
+    <string name="onboarding_offline_model_body">Translation runs offline on your phone. Download %1$s → %2$s now (~%3$d MB), or later when you first read.</string>
+    <string name="onboarding_offline_model_ready">%1$s → %2$s packs are already on this phone.</string>
+    <string name="onboarding_service_restricted_hint">Switch greyed out? Allow restricted settings first</string>
+    <string name="onboarding_readers_recommended">Recommended readers</string>
+    <string name="onboarding_readers_other">Other installed apps</string>
+    <string name="onboarding_readers_browser_note">Browsers are included for web manga sites.</string>
+    <string name="onboarding_readers_empty_warn">Finish without readers</string>
+
+    <string name="tooltip_model_tap">Missing %1$s pack. Tap to download in Serifu.</string>
+    <string name="tooltip_wifi_tap">Unmetered Wi-Fi is required for the %1$s pack. Tap to manage in Serifu.</string>
+    <string name="tooltip_timeout_tap">The %1$s pack download timed out. Tap to retry in Serifu.</string>
+    <string name="sample_service_starting">Accessibility service is starting. Wait a second and tap Translate again.</string>
+    <string name="sample_downloading_hint">Downloading %1$s pack… this may take a moment.</string>
+    <string name="sample_missing_pack_hint">Offline pack needed for %1$s → %2$s. Tap Download pack or Translate to fetch it.</string>
+    <string name="sample_open_languages">Download pack</string>
+    <string name="sample_toolbar_tip">Tap the page anytime to hide or show these controls.</string>
 </resources>

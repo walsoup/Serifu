@@ -18,6 +18,8 @@ class BergamotCatalogTest {
         assertTrue("base-memory" in jaEn.architectures)
         assertEquals("3.1", jaEn.variants["base-memory"]!!.version)
         assertEquals(3, jaEn.variants["base-memory"]!!.files.size)
+        val files = jaEn.variants["base-memory"]!!
+        assertEquals(files.files.sumOf { it.transferBytes }, files.totalBytes)
     }
 
     @Test

@@ -27,6 +27,7 @@ import app.serifu.core.model.QualityMode
 import app.walsoup.serifu.ml.BergamotModelManager
 import app.walsoup.serifu.ml.BergamotTranslationEngine
 import app.walsoup.serifu.ml.MlKitTranslationEngine
+import app.walsoup.serifu.ml.NetworkStatus
 import app.walsoup.serifu.ml.OcrEngine
 import app.walsoup.serifu.ml.OnDeviceTranslationEngine
 import app.walsoup.serifu.ml.RemoteAiTranslationEngine
@@ -78,6 +79,7 @@ class SerifuAccessibilityService : AccessibilityService() {
             // Null means the store has not emitted yet. The default is to allow
             // mobile data; only an explicit opt-in should wait for Wi-Fi.
             wifiOnly = { app.settingsRepository.settings.value?.wifiOnlyDownloads == true },
+            isOnUnmeteredNetwork = { NetworkStatus.isUnmetered(applicationContext) },
         )
         val bergamot = BergamotTranslationEngine(
             models = bergamotModels,
@@ -121,6 +123,17 @@ class SerifuAccessibilityService : AccessibilityService() {
             },
             openApp = {
                 startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            },
+            openAppRoute = { route ->
+                startActivity(
+                    Intent(this, MainActivity::class.java)
+                        .putExtra(MainActivity.EXTRA_NAV_ROUTE, route)
+                        .addFlags(
+                            Intent.FLAG_ACTIVITY_NEW_TASK or
+                                Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                                Intent.FLAG_ACTIVITY_CLEAR_TOP,
+                        ),
+                )
             },
             notifyPermissionLost = ::notifyPermissionLost,
             publishTimings = { app.pipelineTimings.value = it },

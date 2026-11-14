@@ -28,6 +28,7 @@ import app.serifu.core.vision.SelfDetection
 import app.walsoup.serifu.debug.PipelineTimings
 import app.walsoup.serifu.ml.OcrEngine
 import app.walsoup.serifu.ml.TranslationUnavailable
+import app.walsoup.serifu.ml.UnavailableReason
 import app.walsoup.serifu.overlay.HudModel
 import app.walsoup.serifu.overlay.RenderBubble
 import app.walsoup.serifu.overlay.RenderPage
@@ -64,6 +65,7 @@ class TranslationCoordinator(
     private val notifyPermissionLost: () -> Unit,
     private val publishTimings: (PipelineTimings) -> Unit,
     private val resolveEngineId: (Settings) -> EngineId = { EngineId.MLKIT },
+    private val openAppRoute: (String) -> Unit = { openApp() },
     private val clock: () -> Long = SystemClock::uptimeMillis,
 ) : OverlayEvents {
     private val events = Channel<Event>(Channel.UNLIMITED)
@@ -495,10 +497,22 @@ class TranslationCoordinator(
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (missing: TranslationUnavailable) {
-                    Log.w(TAG, "TranslationUnavailable: ${missing.languageName}")
+                    Log.w(TAG, "TranslationUnavailable: ${missing.languageName} (${missing.reason})")
                     if (generation == state.generation) {
+                        val msgRes = when (missing.reason) {
+                            UnavailableReason.WIFI_REQUIRED -> R.string.tooltip_wifi_tap
+                            UnavailableReason.TIMEOUT -> R.string.tooltip_timeout_tap
+                            else -> R.string.tooltip_model_tap
+                        }
+                        val targetRoute = if (settings.activeEngine.usingBergamot) {
+                            "settings/engine"
+                        } else {
+                            "settings/languages"
+                        }
                         withContext(Dispatchers.Main) {
-                            overlays.showTooltip(context.getString(R.string.tooltip_model, missing.languageName))
+                            overlays.showTooltip(context.getString(msgRes, missing.languageName)) {
+                                openAppRoute(targetRoute)
+                            }
                         }
                         send(Event.PageEmpty(generation))
                     }

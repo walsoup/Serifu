@@ -2,6 +2,7 @@ package app.walsoup.serifu.settings
 
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.mutablePreferencesOf
+import app.serifu.core.Tuning
 import app.serifu.core.model.LetteringFont
 import app.serifu.core.model.ModelVariant
 import app.serifu.core.model.OnDeviceEngine
@@ -14,6 +15,7 @@ import app.serifu.core.model.TriggerMode
 import app.walsoup.serifu.ui.nav.Routes
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -92,6 +94,35 @@ class SettingsCodecTest {
         val decoded = prefs.toSettings(defaultReaders = emptySet())
         assertTrue(decoded.onboardingDone)
         assertEquals(Routes.Home, Routes.start(decoded.onboardingDone))
+        assertTrue(Routes.allows(Routes.Engine))
+        assertTrue(Routes.allows(Routes.onboarding(Tuning.ONBOARDING_STEPS)))
+        assertFalse(Routes.allows("invalid_route"))
+        assertFalse(Routes.allows("onboarding/0"))
+        assertFalse(Routes.allows("onboarding/99"))
+        assertNull(Routes.allowed("invalid_route"))
+    }
+
+    @Test
+    fun activeEngineKeepsOnDeviceDraftForProgressiveMode() {
+        val progressive = Settings(
+            quality = QualityMode.BEST_PROGRESSIVE,
+            onDeviceEngine = OnDeviceEngine.BERGAMOT,
+            aiApiKey = "",
+        )
+        assertEquals(ActiveEngine.Kind.API_PROGRESSIVE, progressive.activeEngine.kind)
+        assertTrue(progressive.activeEngine.usingBergamot)
+        assertTrue(progressive.activeEngine.needsApiKey)
+        val configured = progressive.copy(aiApiKey = "sk-test")
+        assertFalse(configured.activeEngine.needsApiKey)
+        assertTrue(configured.activeEngine.usingBergamot)
+        val apiOnly = progressive.copy(quality = QualityMode.BEST_ONLY, aiEndpoint = "http://localhost")
+        assertTrue(apiOnly.activeEngine.apiOnly)
+        assertFalse(apiOnly.activeEngine.usingBergamot)
+        assertFalse(apiOnly.activeEngine.needsApiKey)
+        val fast = Settings(quality = QualityMode.FAST, onDeviceEngine = OnDeviceEngine.MLKIT)
+        assertEquals(ActiveEngine.Kind.ML_KIT, fast.activeEngine.kind)
+        assertTrue(fast.activeEngine.usingMlKit)
+        assertFalse(fast.activeEngine.usesApi)
     }
 
     @Test

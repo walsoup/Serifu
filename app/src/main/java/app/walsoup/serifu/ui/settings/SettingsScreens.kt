@@ -36,13 +36,9 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.runtime.saveable.rememberSaveable
 import kotlinx.coroutines.delay
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.ImeAction
@@ -70,8 +66,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
-import android.view.HapticFeedbackConstants
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
@@ -86,22 +80,28 @@ import app.serifu.core.model.SourceLanguage
 import app.serifu.core.model.TargetLanguage
 import androidx.compose.foundation.verticalScroll
 import app.walsoup.serifu.ml.BergamotInstalledModel
+import app.walsoup.serifu.ml.DownloadError
+import app.walsoup.serifu.ui.components.label
 import app.walsoup.serifu.ml.LanguageModelManager
 import app.walsoup.serifu.ml.LanguagePack
 import kotlinx.coroutines.launch
 import app.walsoup.serifu.overlay.SerifuFonts
+import app.walsoup.serifu.settings.ActiveEngine
 import app.walsoup.serifu.settings.KnownReaders
+import app.walsoup.serifu.ui.components.ActiveModelStatusCard
 import app.walsoup.serifu.ui.components.LaunchableApp
 import app.walsoup.serifu.ui.components.MangaPanel
-import app.walsoup.serifu.ui.components.SealBadge
 import app.walsoup.serifu.ui.components.SpeechBubblePreview
+import app.walsoup.serifu.ui.components.rememberBergamotRoute
 import app.walsoup.serifu.ui.components.rememberLaunchableApps
 import app.walsoup.serifu.ui.home.HomeViewModel
 import app.walsoup.serifu.ui.design.ActionButton
 import app.walsoup.serifu.ui.design.ActionStyle
 import app.walsoup.serifu.ui.design.BrandLockup
 import app.walsoup.serifu.ui.design.SerifuConfirmDialog
+import app.walsoup.serifu.ui.design.SerifuProgressBar
 import app.walsoup.serifu.ui.design.SerifuSlider
+import app.walsoup.serifu.ui.design.StatusBadge
 import app.walsoup.serifu.ui.design.fullName
 import app.walsoup.serifu.ui.design.label
 import app.walsoup.serifu.ui.design.shortName
@@ -112,7 +112,6 @@ import app.walsoup.serifu.ui.design.Hairline
 import app.walsoup.serifu.ui.design.Pill
 import app.walsoup.serifu.ui.design.SectionTitle
 import app.walsoup.serifu.ui.design.Serifu
-import app.walsoup.serifu.ui.design.SerifuScreen
 import app.walsoup.serifu.ui.design.SerifuSwitch
 import app.walsoup.serifu.ui.design.SerifuTextField
 import app.walsoup.serifu.ui.design.SettingLine
@@ -121,16 +120,23 @@ import app.walsoup.serifu.ui.design.TopBar
 import app.walsoup.serifu.ui.versionName
 
 @Composable
-fun LanguagesScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
+fun LanguagesScreen(
+    viewModel: HomeViewModel,
+    onBack: () -> Unit,
+    onOpenEngine: () -> Unit = {},
+) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val c = Serifu.colors
-    val app = LocalContext.current.applicationContext as SerifuApp
+    val context = LocalContext.current
+    val app = context.applicationContext as SerifuApp
     val downloadedCodes by LanguageModelManager.downloadedCodes.collectAsStateWithLifecycle()
     val inProgressCodes by LanguageModelManager.inProgressCodes.collectAsStateWithLifecycle()
+    val mlKitErrors by LanguageModelManager.errors.collectAsStateWithLifecycle()
     val bergamotInstalled by app.bergamotModels.installed.collectAsStateWithLifecycle()
     var pendingDelete by remember { mutableStateOf<LanguagePack?>(null) }
     var pendingBergamotDelete by remember { mutableStateOf<BergamotInstalledModel?>(null) }
-    var showAllTargets by remember { mutableStateOf(false) }
+    var pickingTarget by rememberSaveable { mutableStateOf(false) }
+    var targetQuery by rememberSaveable { mutableStateOf("") }
     val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
@@ -141,7 +147,22 @@ fun LanguagesScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
     val needed = remember(settings.sourceLanguage, settings.targetLanguage) {
         setOf(settings.sourceLanguage.tag, settings.targetLanguage)
     }
-    val missing = LanguageModelManager.ALL_PACKS.filter { it.code !in downloadedCodes && it.code !in inProgressCodes }
+    val extraTargetPack = remember(settings.targetLanguage) {
+        if (LanguageModelManager.ALL_PACKS.any { it.code == settings.targetLanguage }) {
+            null
+        } else {
+            val lang = TargetLanguage.fromTag(settings.targetLanguage)
+            LanguagePack(code = lang.tag, name = lang.englishName, nativeName = lang.englishName, isSource = false)
+        }
+    }
+    val allManageablePacks = remember(extraTargetPack) {
+        if (extraTargetPack != null) {
+            LanguageModelManager.ALL_PACKS + extraTargetPack
+        } else {
+            LanguageModelManager.ALL_PACKS
+        }
+    }
+    val missing = allManageablePacks.filter { it.code !in downloadedCodes && it.code !in inProgressCodes }
     val missingNeeded = missing.filter { it.code in needed }
 
     pendingDelete?.let { pack ->
@@ -185,6 +206,14 @@ fun LanguagesScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
             color = c.textSecondary,
         )
 
+        Spacer(Modifier.height(14.dp))
+        ActiveModelStatusCard(
+            settings = settings,
+            onOpenEngine = onOpenEngine,
+            onOpenLanguages = {},
+            showReadyState = true,
+        )
+
         SectionTitle(stringResource(R.string.source_label))
         Row(
             modifier = Modifier
@@ -193,8 +222,9 @@ fun LanguagesScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             SourceLanguage.entries.forEach { lang ->
+                val readyMark = if (lang.tag in downloadedCodes) " \u2713" else ""
                 Pill(
-                    text = lang.englishName,
+                    text = "${lang.englishName}$readyMark",
                     selected = settings.sourceLanguage == lang,
                     onClick = { viewModel.update { it.copy(sourceLanguage = lang) } },
                 )
@@ -202,54 +232,139 @@ fun LanguagesScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
         }
 
         SectionTitle(stringResource(R.string.target_label))
-        Text(
-            text = stringResource(R.string.languages_pivot),
-            style = Serifu.type.caption,
-            color = c.textSecondary,
-            modifier = Modifier.padding(bottom = 6.dp),
-        )
         Hairline()
-        // The ten languages with offline packs come first; the long tail stays one tap away.
-        val popular = remember { LanguageModelManager.POPULAR_TARGET_PACKS.map { TargetLanguage.fromTag(it.code) } }
-        val selectedExtra = TargetLanguage.fromTag(settings.targetLanguage).takeIf { it !in popular }
-        val shownTargets = when {
-            showAllTargets -> TargetLanguage.all
-            selectedExtra != null -> listOf(selectedExtra) + popular
-            else -> popular
-        }
-        shownTargets.forEach { language ->
-            val selected = settings.targetLanguage == language.tag
-            SettingLine(
-                label = language.englishName,
-                value = if (selected) stringResource(R.string.active_value) else null,
-                emphasis = selected,
-                showChevron = false,
-                onClick = { viewModel.update { it.copy(targetLanguage = language.tag) } },
-            )
-        }
         SettingLine(
-            label = if (showAllTargets) stringResource(R.string.fewer_languages) else stringResource(R.string.more_languages, TargetLanguage.all.size),
-            showChevron = false,
+            label = targetName(settings.targetLanguage),
+            value = if (pickingTarget) stringResource(R.string.close) else stringResource(R.string.target_change),
             emphasis = true,
-            onClick = { showAllTargets = !showAllTargets },
+            showChevron = !pickingTarget,
+            showHairline = !pickingTarget,
+            onClick = { pickingTarget = !pickingTarget },
         )
+        AnimatedVisibility(
+            visible = pickingTarget,
+            enter = expandVertically(tween(200)) + fadeIn(tween(180)),
+            exit = shrinkVertically(tween(180)) + fadeOut(tween(140)),
+        ) {
+            Column(Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
+                Text(
+                    text = stringResource(R.string.languages_pivot),
+                    style = Serifu.type.caption,
+                    color = c.textSecondary,
+                )
+                Spacer(Modifier.height(10.dp))
+                GroupLabel(stringResource(R.string.target_popular_languages))
+                Spacer(Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    LanguageModelManager.POPULAR_TARGET_PACKS.forEach { pack ->
+                        Pill(
+                            text = pack.name,
+                            selected = settings.targetLanguage == pack.code,
+                            onClick = {
+                                viewModel.update { it.copy(targetLanguage = pack.code) }
+                                pickingTarget = false
+                                targetQuery = ""
+                            },
+                        )
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                SerifuTextField(
+                    value = targetQuery,
+                    onValueChange = { targetQuery = it },
+                    placeholder = stringResource(R.string.target_search_placeholder),
+                    trailingIcon = if (targetQuery.isNotEmpty()) {
+                        {
+                            IconButton(onClick = { targetQuery = "" }) {
+                                Icon(
+                                    painter = painterResource(SerifuIcons.Close),
+                                    contentDescription = stringResource(R.string.close),
+                                    tint = c.textSecondary,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                            }
+                        }
+                    } else null,
+                )
+                val filteredTargets = remember(targetQuery) {
+                    if (targetQuery.isBlank()) {
+                        TargetLanguage.all
+                    } else {
+                        TargetLanguage.all.filter {
+                            it.englishName.contains(targetQuery, ignoreCase = true) ||
+                                it.tag.contains(targetQuery, ignoreCase = true)
+                        }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                GroupLabel(stringResource(R.string.target_all_languages, TargetLanguage.all.size))
+                Spacer(Modifier.height(4.dp))
+                Hairline()
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 260.dp)
+                        .verticalScroll(rememberScrollState()),
+                ) {
+                    if (filteredTargets.isEmpty()) {
+                        Text(
+                            text = stringResource(R.string.no_apps_match),
+                            style = Serifu.type.caption,
+                            color = c.textSecondary,
+                            modifier = Modifier.padding(vertical = 12.dp),
+                        )
+                    } else {
+                        filteredTargets.forEach { language ->
+                            val selected = settings.targetLanguage == language.tag
+                            SettingLine(
+                                label = language.englishName,
+                                value = if (selected) stringResource(R.string.active_value) else language.tag,
+                                emphasis = selected,
+                                mono = !selected,
+                                showChevron = false,
+                                onClick = {
+                                    viewModel.update { it.copy(targetLanguage = language.tag) }
+                                    pickingTarget = false
+                                    targetQuery = ""
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        Hairline()
 
         SectionTitle(stringResource(R.string.packs_title))
         Text(
-            text = stringResource(R.string.packs_body),
+            text = stringResource(R.string.packs_overview_note),
             style = Serifu.type.bodySecondary,
             color = c.textSecondary,
         )
+        Spacer(Modifier.height(10.dp))
+        Hairline()
+        SwitchLine(
+            label = stringResource(R.string.wifi_only),
+            checked = settings.wifiOnlyDownloads,
+            onCheckedChange = { checked -> viewModel.update { it.copy(wifiOnlyDownloads = checked) } },
+            subtitle = stringResource(R.string.wifi_subtitle),
+        )
         Spacer(Modifier.height(14.dp))
-        // Needed packs are what stops translation working, so they get the primary action.
-        // Everything else is optional and stays quiet.
         if (missingNeeded.isNotEmpty()) {
             ActionButton(
                 text = stringResource(R.string.packs_download_needed, missingNeeded.size, missingNeeded.sumOf { it.sizeMb }),
                 onClick = {
-                    coroutineScope.launch {
-                        LanguageModelManager.downloadPacks(missingNeeded.map { it.code }.toSet(), settings.wifiOnlyDownloads)
-                    }
+                    LanguageModelManager.startDownload(
+                        app.appScope,
+                        missingNeeded.map { it.code }.toSet(),
+                        settings.wifiOnlyDownloads,
+                        context,
+                    )
                 },
             )
         } else {
@@ -263,9 +378,12 @@ fun LanguagesScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
                 ActionButton(
                     text = stringResource(R.string.packs_download_missing, missing.size, missing.sumOf { it.sizeMb }),
                     onClick = {
-                        coroutineScope.launch {
-                            LanguageModelManager.downloadPacks(missing.map { it.code }.toSet(), settings.wifiOnlyDownloads)
-                        }
+                        LanguageModelManager.startDownload(
+                            app.appScope,
+                            missing.map { it.code }.toSet(),
+                            settings.wifiOnlyDownloads,
+                            context,
+                        )
                     },
                     style = ActionStyle.Ghost,
                 )
@@ -275,19 +393,56 @@ fun LanguagesScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
         GroupHeader(stringResource(R.string.source_packs))
         Hairline()
         LanguageModelManager.SOURCE_PACKS.forEach { pack ->
-            LanguagePackRow(pack, settings.sourceLanguage.englishName, targetName(settings.targetLanguage), pack.code in needed,
-                pack.code in downloadedCodes, pack.code in inProgressCodes,
-                onDownload = { coroutineScope.launch { LanguageModelManager.downloadPacks(setOf(pack.code), settings.wifiOnlyDownloads) } },
-                onDelete = { pendingDelete = pack })
+            LanguagePackRow(
+                pack = pack,
+                sourceName = settings.sourceLanguage.englishName,
+                targetName = targetName(settings.targetLanguage),
+                isNeeded = pack.code in needed,
+                isDownloaded = pack.code in downloadedCodes,
+                isInProgress = pack.code in inProgressCodes,
+                error = mlKitErrors[pack.code],
+                onDownload = {
+                    LanguageModelManager.startDownload(
+                        app.appScope,
+                        setOf(pack.code),
+                        settings.wifiOnlyDownloads,
+                        context,
+                    )
+                },
+                onDelete = { pendingDelete = pack },
+                onCancel = { LanguageModelManager.cancelDownload(setOf(pack.code)) },
+            )
         }
 
         GroupHeader(stringResource(R.string.target_packs))
         Hairline()
-        LanguageModelManager.POPULAR_TARGET_PACKS.forEach { pack ->
-            LanguagePackRow(pack, settings.sourceLanguage.englishName, targetName(settings.targetLanguage), pack.code in needed,
-                pack.code in downloadedCodes, pack.code in inProgressCodes,
-                onDownload = { coroutineScope.launch { LanguageModelManager.downloadPacks(setOf(pack.code), settings.wifiOnlyDownloads) } },
-                onDelete = { pendingDelete = pack })
+        val targetPackRows = remember(extraTargetPack) {
+            if (extraTargetPack != null) {
+                listOf(extraTargetPack) + LanguageModelManager.POPULAR_TARGET_PACKS
+            } else {
+                LanguageModelManager.POPULAR_TARGET_PACKS
+            }
+        }
+        targetPackRows.forEach { pack ->
+            LanguagePackRow(
+                pack = pack,
+                sourceName = settings.sourceLanguage.englishName,
+                targetName = targetName(settings.targetLanguage),
+                isNeeded = pack.code in needed,
+                isDownloaded = pack.code in downloadedCodes,
+                isInProgress = pack.code in inProgressCodes,
+                error = mlKitErrors[pack.code],
+                onDownload = {
+                    LanguageModelManager.startDownload(
+                        app.appScope,
+                        setOf(pack.code),
+                        settings.wifiOnlyDownloads,
+                        context,
+                    )
+                },
+                onDelete = { pendingDelete = pack },
+                onCancel = { LanguageModelManager.cancelDownload(setOf(pack.code)) },
+            )
         }
 
         SectionTitle(stringResource(R.string.bergamot_models_title))
@@ -296,7 +451,7 @@ fun LanguagesScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
             style = Serifu.type.bodySecondary,
             color = c.textSecondary,
         )
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(10.dp))
         if (bergamotInstalled.isEmpty()) {
             Text(
                 text = stringResource(R.string.bergamot_none_installed),
@@ -305,31 +460,52 @@ fun LanguagesScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
             )
         } else {
             Hairline()
-            bergamotInstalled.forEachIndexed { index, model ->
-                SettingLine(
-                    label = stringResource(
-                        R.string.bergamot_model_row,
-                        model.from,
-                        model.to,
-                        model.architecture,
-                        model.sizeMb,
-                    ),
-                    value = stringResource(R.string.pack_on_phone),
-                    showChevron = false,
-                    showHairline = index < bergamotInstalled.lastIndex,
-                    onClick = { pendingBergamotDelete = model },
-                )
+            bergamotInstalled.forEach { model ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 56.dp)
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(
+                                R.string.bergamot_model_row,
+                                model.from,
+                                model.to,
+                                model.architecture,
+                                model.sizeMb,
+                            ),
+                            style = Serifu.type.body,
+                            color = c.text,
+                        )
+                        Text(
+                            text = stringResource(R.string.pack_on_phone),
+                            style = Serifu.type.caption,
+                            color = c.textSecondary,
+                        )
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Pill(
+                        text = stringResource(R.string.delete),
+                        selected = false,
+                        onClick = { pendingBergamotDelete = model },
+                    )
+                }
+                Hairline()
             }
         }
-
-        SectionTitle(stringResource(R.string.network_label))
-        Hairline()
-        SwitchLine(
-            label = stringResource(R.string.wifi_only),
-            checked = settings.wifiOnlyDownloads,
-            onCheckedChange = { checked -> viewModel.update { it.copy(wifiOnlyDownloads = checked) } },
-            subtitle = stringResource(R.string.wifi_subtitle),
-            showHairline = false,
+        Spacer(Modifier.height(10.dp))
+        ActionButton(
+            text = stringResource(R.string.packs_bergamot_cta),
+            onClick = {
+                viewModel.update {
+                    it.copy(quality = QualityMode.FAST, onDeviceEngine = OnDeviceEngine.BERGAMOT)
+                }
+                onOpenEngine()
+            },
+            style = ActionStyle.Ghost,
         )
         Spacer(Modifier.height(24.dp))
     }
@@ -350,39 +526,71 @@ private fun LanguagePackRow(
     isNeeded: Boolean,
     isDownloaded: Boolean,
     isInProgress: Boolean,
+    error: DownloadError?,
     onDownload: () -> Unit,
     onDelete: () -> Unit,
+    onCancel: () -> Unit,
 ) {
     val c = Serifu.colors
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 60.dp)
-            .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(if (pack.nativeName == pack.name) pack.name else "${pack.name} \u00B7 ${pack.nativeName}", style = Serifu.type.body, color = c.text)
-            val (statusText, statusColor) = when {
-                isInProgress -> stringResource(R.string.pack_downloading) to c.primaryText
-                isDownloaded -> stringResource(R.string.pack_ready, pack.sizeMb) to c.textSecondary
-                isNeeded -> stringResource(R.string.pack_needed, sourceName, targetName) to c.primaryText
-                else -> stringResource(R.string.pack_not_downloaded, pack.sizeMb) to c.textSecondary
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 60.dp)
+                .padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        if (pack.nativeName == pack.name) pack.name else "${pack.name} \u00B7 ${pack.nativeName}",
+                        style = Serifu.type.body,
+                        color = c.text,
+                    )
+                    if (isNeeded && !isDownloaded && !isInProgress) {
+                        StatusBadge(text = stringResource(R.string.packs_needed_badge), highlighted = true)
+                    }
+                }
+                val (statusText, statusColor) = when {
+                    isInProgress -> stringResource(R.string.pack_downloading) to c.primaryText
+                    error != null -> error.label() to c.primaryText
+                    isDownloaded -> stringResource(R.string.pack_ready, pack.sizeMb) to c.textSecondary
+                    isNeeded -> stringResource(R.string.pack_needed, sourceName, targetName) to c.primaryText
+                    else -> stringResource(R.string.pack_not_downloaded, pack.sizeMb) to c.textSecondary
+                }
+                Text(statusText, style = Serifu.type.caption, color = statusColor)
             }
-            Text(statusText, style = Serifu.type.caption, color = statusColor)
+            Spacer(Modifier.width(12.dp))
+            when {
+                isInProgress -> Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = c.primary,
+                    )
+                    Pill(
+                        text = stringResource(R.string.download_cancel),
+                        selected = false,
+                        onClick = onCancel,
+                    )
+                }
+                isDownloaded -> Pill(text = stringResource(R.string.packs_delete_action), selected = false, onClick = onDelete)
+                error != null -> Pill(text = stringResource(R.string.download_retry), selected = true, onClick = onDownload)
+                else -> Pill(text = stringResource(R.string.download), selected = isNeeded, onClick = onDownload)
+            }
         }
-        Spacer(Modifier.width(12.dp))
-        when {
-            isInProgress -> CircularProgressIndicator(
-                modifier = Modifier.size(20.dp),
-                strokeWidth = 2.dp,
-                color = c.primary,
-            )
-            isDownloaded -> Pill(text = stringResource(R.string.delete), selected = false, onClick = onDelete)
-            else -> Pill(text = stringResource(R.string.download), selected = isNeeded, onClick = onDownload)
+        if (isInProgress) {
+            SerifuProgressBar(progress = null, height = 3.dp)
+            Spacer(Modifier.height(8.dp))
         }
+        Hairline()
     }
-    Hairline()
 }
 
 @Composable
@@ -630,49 +838,79 @@ fun BehaviourScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
 }
 
 @Composable
-fun EngineScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
+fun EngineScreen(
+    viewModel: HomeViewModel,
+    onBack: () -> Unit,
+    onOpenLanguages: () -> Unit = {},
+) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val c = Serifu.colors
     val context = LocalContext.current
     val app = context.applicationContext as SerifuApp
     val bergamotModels = app.bergamotModels
-    val downloaded by LanguageModelManager.downloadedCodes.collectAsStateWithLifecycle()
-    val inProgress by bergamotModels.inProgressKeys.collectAsStateWithLifecycle()
-    val coroutineScope = rememberCoroutineScope()
-    var route by remember { mutableStateOf<ModelRoute?>(null) }
-    var routeError by remember { mutableStateOf<String?>(null) }
-    var downloadError by remember { mutableStateOf<String?>(null) }
-    var downloading by remember { mutableStateOf(false) }
-    val downloadFailedFallback = stringResource(R.string.engine_bergamot_download_failed)
-    LaunchedEffect(Unit) { LanguageModelManager.refreshDownloaded() }
-    LaunchedEffect(settings.sourceLanguage, settings.targetLanguage, settings.bergamotVariant) {
-        routeError = null
-        downloadError = null
-        route = try {
-            bergamotModels.resolveRoute(
-                settings.sourceLanguage.tag,
-                settings.targetLanguage,
-                settings.bergamotVariant,
-            )
-        } catch (cancelled: kotlinx.coroutines.CancellationException) {
-            throw cancelled
-        } catch (t: Throwable) {
-            routeError = t.message
-            null
-        }
+    val bergamotInstalled by bergamotModels.installed.collectAsStateWithLifecycle()
+    val bergamotReadyKeys by bergamotModels.readyKeys.collectAsStateWithLifecycle()
+    var pendingBergamotDelete by remember { mutableStateOf<BergamotInstalledModel?>(null) }
+    var confirmDeleteActiveRoute by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        LanguageModelManager.refreshDownloaded()
+        bergamotModels.refreshInstalled()
     }
-    val packs = LanguageModelManager.SOURCE_PACKS + LanguageModelManager.POPULAR_TARGET_PACKS.take(1)
-    val usingApi = settings.quality == QualityMode.BEST_ONLY || settings.quality == QualityMode.BEST_PROGRESSIVE
-    val usingBergamot = !usingApi && settings.onDeviceEngine == OnDeviceEngine.BERGAMOT
-    val usingMlKit = !usingApi && settings.onDeviceEngine == OnDeviceEngine.MLKIT
+
+    val active = settings.activeEngine
+    val usingApi = active.usesApi
+    val usingBergamot = active.kind == ActiveEngine.Kind.BERGAMOT
+    val usingMlKit = active.kind == ActiveEngine.Kind.ML_KIT
     val sourceName = settings.sourceLanguage.englishName
     val targetLabel = targetName(settings.targetLanguage)
-    val variantLabel = if (settings.bergamotVariant == ModelVariant.LITE) {
-        stringResource(R.string.engine_bergamot_lite)
-    } else {
-        stringResource(R.string.engine_bergamot_full)
+
+    val resolvedRoute = rememberBergamotRoute(
+        bergamotModels = bergamotModels,
+        sourceTag = settings.sourceLanguage.tag,
+        targetTag = settings.targetLanguage,
+        variant = settings.bergamotVariant,
+    )
+    val route = resolvedRoute.route
+    val routeReady = remember(route, bergamotReadyKeys) {
+        route != null && bergamotModels.isRouteReady(route)
     }
-    val routeReady = route != null && bergamotModels.isRouteReady(route!!)
+
+    pendingBergamotDelete?.let { model ->
+        SerifuConfirmDialog(
+            title = stringResource(R.string.bergamot_delete_title, model.from, model.to),
+            text = stringResource(R.string.bergamot_delete_body),
+            confirmLabel = stringResource(R.string.delete),
+            onConfirm = {
+                bergamotModels.deletePair(model.from, model.to, model.architecture)
+                pendingBergamotDelete = null
+            },
+            onDismiss = { pendingBergamotDelete = null },
+        )
+    }
+
+    if (confirmDeleteActiveRoute && route != null) {
+        SerifuConfirmDialog(
+            title = stringResource(R.string.bergamot_delete_title, sourceName, targetLabel),
+            text = stringResource(R.string.bergamot_delete_body),
+            confirmLabel = stringResource(R.string.delete),
+            onConfirm = {
+                when (route) {
+                    is ModelRoute.Direct -> bergamotModels.deletePair(
+                        route.model.from,
+                        route.model.to,
+                        route.model.architecture,
+                    )
+                    is ModelRoute.Pivot -> {
+                        bergamotModels.deletePair(route.first.from, route.first.to, route.first.architecture)
+                        bergamotModels.deletePair(route.second.from, route.second.to, route.second.architecture)
+                    }
+                }
+                confirmDeleteActiveRoute = false
+            },
+            onDismiss = { confirmDeleteActiveRoute = false },
+        )
+    }
 
     Column(
         Modifier
@@ -718,7 +956,16 @@ fun EngineScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
             Pill(
                 text = stringResource(R.string.engine_api),
                 selected = usingApi,
-                onClick = { viewModel.update { it.copy(quality = QualityMode.BEST_ONLY) } },
+                onClick = {
+                    viewModel.update { current ->
+                        val nextQuality = if (current.quality == QualityMode.BEST_PROGRESSIVE) {
+                            QualityMode.BEST_PROGRESSIVE
+                        } else {
+                            QualityMode.BEST_ONLY
+                        }
+                        current.copy(quality = nextQuality)
+                    }
+                },
                 modifier = Modifier.weight(1f),
             )
         }
@@ -734,6 +981,30 @@ fun EngineScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
             style = Serifu.type.caption,
             color = c.textSecondary,
         )
+
+        if (usingMlKit) {
+            SectionTitle(stringResource(R.string.engine_mlkit_pair_title))
+            ActiveModelStatusCard(
+                settings = settings,
+                onOpenEngine = {},
+                onOpenLanguages = onOpenLanguages,
+                showReadyState = true,
+            )
+            Spacer(Modifier.height(14.dp))
+            Hairline()
+            SwitchLine(
+                label = stringResource(R.string.wifi_only),
+                checked = settings.wifiOnlyDownloads,
+                onCheckedChange = { checked -> viewModel.update { it.copy(wifiOnlyDownloads = checked) } },
+                subtitle = stringResource(R.string.wifi_subtitle),
+            )
+            Spacer(Modifier.height(14.dp))
+            ActionButton(
+                text = stringResource(R.string.engine_manage_all_packs),
+                onClick = onOpenLanguages,
+                style = ActionStyle.Ghost,
+            )
+        }
 
         if (usingBergamot) {
             SectionTitle(stringResource(R.string.engine_bergamot_size_label))
@@ -768,268 +1039,366 @@ fun EngineScreen(viewModel: HomeViewModel, onBack: () -> Unit) {
                 style = Serifu.type.caption,
                 color = c.textSecondary,
             )
-            if (!BergamotNative.available) {
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = stringResource(R.string.engine_bergamot_native_missing),
-                    style = Serifu.type.caption,
-                    color = c.primaryText,
-                )
-            } else if (route == null) {
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = routeError ?: stringResource(R.string.engine_bergamot_unsupported, sourceName, targetLabel),
-                    style = Serifu.type.caption,
-                    color = c.primaryText,
-                )
-            } else {
-                val routeArch = when (val r = route) {
-                    is ModelRoute.Direct -> r.model.architecture
-                    is ModelRoute.Pivot -> r.first.architecture
-                    null -> null
+            if (BergamotNative.available && route != null) {
+                val routeArch = when (route) {
+                    is ModelRoute.Direct -> route.model.architecture
+                    is ModelRoute.Pivot -> route.first.architecture
                 }
                 val archMismatchMessage = when {
                     settings.bergamotVariant == ModelVariant.FULL && routeArch == "tiny" ->
                         stringResource(R.string.engine_bergamot_full_unavailable, sourceName, targetLabel)
-                    settings.bergamotVariant == ModelVariant.LITE && routeArch != null && routeArch != "tiny" ->
+                    settings.bergamotVariant == ModelVariant.LITE && routeArch != "tiny" ->
                         stringResource(R.string.engine_bergamot_lite_unavailable, sourceName, targetLabel)
                     else -> null
                 }
                 if (archMismatchMessage != null) {
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(6.dp))
                     Text(
                         text = archMismatchMessage,
                         style = Serifu.type.caption,
                         color = c.textSecondary,
                     )
                 }
-                if (routeReady) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = stringResource(R.string.engine_bergamot_ready, sourceName, targetLabel),
-                        style = Serifu.type.caption,
-                        color = c.primaryText,
-                    )
-                } else {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = stringResource(R.string.engine_bergamot_fallback),
-                        style = Serifu.type.caption,
-                        color = c.textSecondary,
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    ActionButton(
-                        text = stringResource(
-                            R.string.engine_bergamot_download,
-                            sourceName,
-                            targetLabel,
-                            variantLabel,
-                            route!!.sizeMb,
-                        ),
-                        enabled = !downloading && inProgress.isEmpty(),
-                        onClick = {
-                            val toDownload = route ?: return@ActionButton
-                            downloading = true
-                            downloadError = null
-                            coroutineScope.launch {
-                                try {
-                                    bergamotModels.downloadRoute(toDownload, settings.wifiOnlyDownloads)
-                                } catch (cancelled: kotlinx.coroutines.CancellationException) {
-                                    throw cancelled
-                                } catch (t: Throwable) {
-                                    android.util.Log.e("EngineScreen", "Bergamot download failed", t)
-                                    downloadError = t.localizedMessage?.takeIf { it.isNotBlank() }
-                                        ?: downloadFailedFallback
-                                } finally {
-                                    downloading = false
-                                }
+            }
+
+            Spacer(Modifier.height(14.dp))
+            ActiveModelStatusCard(
+                settings = settings,
+                onOpenEngine = {},
+                onOpenLanguages = onOpenLanguages,
+                showReadyState = true,
+                resolvedRoute = resolvedRoute,
+            )
+            if (routeReady && route != null) {
+                Spacer(Modifier.height(10.dp))
+                ActionButton(
+                    text = stringResource(R.string.engine_bergamot_delete),
+                    onClick = { confirmDeleteActiveRoute = true },
+                    style = ActionStyle.Ghost,
+                )
+            }
+
+            Spacer(Modifier.height(16.dp))
+            Hairline()
+            SwitchLine(
+                label = stringResource(R.string.wifi_only),
+                checked = settings.wifiOnlyDownloads,
+                onCheckedChange = { checked -> viewModel.update { it.copy(wifiOnlyDownloads = checked) } },
+                subtitle = stringResource(R.string.wifi_subtitle),
+            )
+
+            SectionTitle(stringResource(R.string.engine_bergamot_installed_section))
+            if (bergamotInstalled.isEmpty()) {
+                Text(
+                    text = stringResource(R.string.bergamot_none_installed),
+                    style = Serifu.type.caption,
+                    color = c.textSecondary,
+                )
+            } else {
+                Hairline()
+                bergamotInstalled.forEach { model ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 56.dp)
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = stringResource(
+                                    R.string.bergamot_model_row,
+                                    model.from,
+                                    model.to,
+                                    model.architecture,
+                                    model.sizeMb,
+                                ),
+                                style = Serifu.type.body,
+                                color = c.text,
+                            )
+                            Text(
+                                text = stringResource(R.string.pack_on_phone),
+                                style = Serifu.type.caption,
+                                color = c.textSecondary,
+                            )
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Pill(
+                            text = stringResource(R.string.delete),
+                            selected = false,
+                            onClick = { pendingBergamotDelete = model },
+                        )
+                    }
+                    Hairline()
+                }
+            }
+        }
+
+        if (usingApi) {
+            SectionTitle(stringResource(R.string.engine_api_mode_label))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Pill(
+                    text = stringResource(R.string.engine_api_only_pill),
+                    selected = settings.quality == QualityMode.BEST_ONLY,
+                    onClick = { viewModel.update { it.copy(quality = QualityMode.BEST_ONLY) } },
+                    modifier = Modifier.weight(1f),
+                )
+                Pill(
+                    text = stringResource(R.string.engine_api_progressive_pill),
+                    selected = settings.quality == QualityMode.BEST_PROGRESSIVE,
+                    onClick = { viewModel.update { it.copy(quality = QualityMode.BEST_PROGRESSIVE) } },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = stringResource(
+                    if (settings.quality == QualityMode.BEST_PROGRESSIVE) {
+                        R.string.engine_api_progressive_desc
+                    } else {
+                        R.string.engine_api_only_desc
+                    },
+                ),
+                style = Serifu.type.caption,
+                color = c.textSecondary,
+            )
+
+            SectionTitle(stringResource(R.string.engine_api_title))
+            Text(
+                text = stringResource(R.string.engine_api_body),
+                style = Serifu.type.bodySecondary,
+                color = c.textSecondary,
+            )
+            Spacer(Modifier.height(12.dp))
+
+            var keyFocus by remember { mutableStateOf(false) }
+            var modelFocus by remember { mutableStateOf(false) }
+            var endpointFocus by remember { mutableStateOf(false) }
+
+            var localKey by rememberSaveable { mutableStateOf(settings.aiApiKey) }
+            var localModel by rememberSaveable { mutableStateOf(settings.aiModel) }
+            var localEndpoint by rememberSaveable { mutableStateOf(settings.aiEndpoint) }
+            var showPassword by remember { mutableStateOf(false) }
+
+            LaunchedEffect(settings.aiApiKey) {
+                if (!keyFocus) localKey = settings.aiApiKey
+            }
+            LaunchedEffect(settings.aiModel) {
+                if (!modelFocus) localModel = settings.aiModel
+            }
+            LaunchedEffect(settings.aiEndpoint) {
+                if (!endpointFocus) localEndpoint = settings.aiEndpoint
+            }
+
+            LaunchedEffect(localKey) {
+                delay(300)
+                if (localKey != settings.aiApiKey) {
+                    viewModel.update { it.copy(aiApiKey = localKey) }
+                }
+            }
+            LaunchedEffect(localModel) {
+                delay(300)
+                if (localModel != settings.aiModel) {
+                    viewModel.update { it.copy(aiModel = localModel) }
+                }
+            }
+            LaunchedEffect(localEndpoint) {
+                delay(300)
+                if (localEndpoint != settings.aiEndpoint) {
+                    viewModel.update { it.copy(aiEndpoint = localEndpoint) }
+                }
+            }
+
+            GroupLabel(stringResource(R.string.engine_api_presets_label))
+            Spacer(Modifier.height(4.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Pill(
+                    text = stringResource(R.string.engine_api_preset_openai),
+                    selected = localEndpoint.contains("api.openai.com", ignoreCase = true) || localEndpoint.isBlank(),
+                    onClick = {
+                        localEndpoint = "https://api.openai.com/v1/chat/completions"
+                        if (localModel.isBlank() || localModel.contains("llama", ignoreCase = true) || localModel.contains("/")) {
+                            localModel = "gpt-4o-mini"
+                        }
+                    },
+                )
+                Pill(
+                    text = stringResource(R.string.engine_api_preset_gemini),
+                    selected = isGeminiEndpoint(localEndpoint),
+                    onClick = {
+                        localEndpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+                    },
+                )
+                Pill(
+                    text = stringResource(R.string.engine_api_preset_openrouter),
+                    selected = localEndpoint.contains("openrouter.ai", ignoreCase = true),
+                    onClick = {
+                        localEndpoint = "https://openrouter.ai/api/v1/chat/completions"
+                        localModel = "google/gemini-2.5-flash"
+                    },
+                )
+                Pill(
+                    text = stringResource(R.string.engine_api_preset_ollama),
+                    selected = localEndpoint.contains("127.0.0.1") || localEndpoint.contains("localhost"),
+                    onClick = {
+                        localEndpoint = "http://127.0.0.1:11434/v1/chat/completions"
+                        localModel = "qwen2.5:7b"
+                    },
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+
+            GroupLabel(stringResource(R.string.ai_api_key_label))
+            Spacer(Modifier.height(4.dp))
+            SerifuTextField(
+                value = localKey,
+                onValueChange = { localKey = it },
+                placeholder = stringResource(R.string.ai_api_key_placeholder),
+                modifier = Modifier.onFocusChanged { keyFocus = it.isFocused },
+                visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Password,
+                    imeAction = ImeAction.Next,
+                    autoCorrectEnabled = false,
+                ),
+                trailingIcon = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (localKey.isNotEmpty()) {
+                            IconButton(onClick = {
+                                localKey = ""
+                                viewModel.update { it.copy(aiApiKey = "") }
+                            }) {
+                                Icon(
+                                    painter = painterResource(SerifuIcons.Close),
+                                    contentDescription = stringResource(R.string.cd_clear_key),
+                                    tint = c.textSecondary,
+                                    modifier = Modifier.size(16.dp),
+                                )
                             }
-                        },
-                    )
-                }
-                if (downloading || inProgress.isNotEmpty()) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = stringResource(R.string.pack_downloading),
-                        style = Serifu.type.caption,
-                        color = c.primaryText,
-                    )
-                }
-                downloadError?.let { message ->
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = message,
-                        style = Serifu.type.caption,
-                        color = c.primaryText,
-                    )
-                }
-            }
-        }
+                        }
+                        IconButton(onClick = { showPassword = !showPassword }) {
+                            Icon(
+                                painter = painterResource(if (showPassword) SerifuIcons.EyeOff else SerifuIcons.Eye),
+                                contentDescription = stringResource(
+                                    if (showPassword) R.string.cd_hide_key else R.string.cd_show_key,
+                                ),
+                                tint = c.textSecondary,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    }
+                },
+            )
+            Spacer(Modifier.height(10.dp))
 
-        SectionTitle(stringResource(R.string.engine_api_title))
-        Text(
-            text = stringResource(R.string.engine_api_body),
-            style = Serifu.type.bodySecondary,
-            color = c.textSecondary,
-        )
-        Spacer(Modifier.height(12.dp))
-
-        var keyFocus by remember { mutableStateOf(false) }
-        var modelFocus by remember { mutableStateOf(false) }
-        var endpointFocus by remember { mutableStateOf(false) }
-
-        var localKey by rememberSaveable { mutableStateOf(settings.aiApiKey) }
-        var localModel by rememberSaveable { mutableStateOf(settings.aiModel) }
-        var localEndpoint by rememberSaveable { mutableStateOf(settings.aiEndpoint) }
-        var showPassword by remember { mutableStateOf(false) }
-
-        LaunchedEffect(settings.aiApiKey) {
-            if (!keyFocus) localKey = settings.aiApiKey
-        }
-        LaunchedEffect(settings.aiModel) {
-            if (!modelFocus) localModel = settings.aiModel
-        }
-        LaunchedEffect(settings.aiEndpoint) {
-            if (!endpointFocus) localEndpoint = settings.aiEndpoint
-        }
-
-        LaunchedEffect(localKey) {
-            delay(300)
-            if (localKey != settings.aiApiKey) {
-                viewModel.update { it.copy(aiApiKey = localKey) }
-            }
-        }
-        LaunchedEffect(localModel) {
-            delay(300)
-            if (localModel != settings.aiModel) {
-                viewModel.update { it.copy(aiModel = localModel) }
-            }
-        }
-        LaunchedEffect(localEndpoint) {
-            delay(300)
-            if (localEndpoint != settings.aiEndpoint) {
-                viewModel.update { it.copy(aiEndpoint = localEndpoint) }
-            }
-        }
-
-        GroupLabel(stringResource(R.string.ai_api_key_label))
-        Spacer(Modifier.height(4.dp))
-        SerifuTextField(
-            value = localKey,
-            onValueChange = { localKey = it },
-            placeholder = stringResource(R.string.ai_api_key_placeholder),
-            modifier = Modifier.onFocusChanged { keyFocus = it.isFocused },
-            visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Password,
-                imeAction = ImeAction.Next,
-                autoCorrectEnabled = false,
-            ),
-            trailingIcon = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (localKey.isNotEmpty()) {
+            GroupLabel(stringResource(R.string.ai_model_label))
+            Spacer(Modifier.height(4.dp))
+            SerifuTextField(
+                value = localModel,
+                onValueChange = { localModel = it },
+                placeholder = stringResource(R.string.ai_model_placeholder),
+                modifier = Modifier.onFocusChanged { modelFocus = it.isFocused },
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Ascii,
+                    imeAction = ImeAction.Next,
+                    autoCorrectEnabled = false,
+                ),
+                trailingIcon = if (localModel.isNotEmpty()) {
+                    {
                         IconButton(onClick = {
-                            localKey = ""
-                            viewModel.update { it.copy(aiApiKey = "") }
+                            localModel = ""
+                            viewModel.update { it.copy(aiModel = "") }
                         }) {
                             Icon(
                                 painter = painterResource(SerifuIcons.Close),
-                                contentDescription = "Clear key",
+                                contentDescription = stringResource(R.string.cd_clear_model),
                                 tint = c.textSecondary,
                                 modifier = Modifier.size(16.dp),
                             )
                         }
                     }
-                    IconButton(onClick = { showPassword = !showPassword }) {
-                        Icon(
-                            painter = painterResource(if (showPassword) SerifuIcons.EyeOff else SerifuIcons.Eye),
-                            contentDescription = if (showPassword) "Hide key" else "Show key",
-                            tint = c.textSecondary,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    }
-                }
-            },
-        )
-        Spacer(Modifier.height(10.dp))
+                } else null,
+            )
+            Spacer(Modifier.height(10.dp))
 
-        GroupLabel(stringResource(R.string.ai_model_label))
-        Spacer(Modifier.height(4.dp))
-        SerifuTextField(
-            value = localModel,
-            onValueChange = { localModel = it },
-            placeholder = stringResource(R.string.ai_model_placeholder),
-            modifier = Modifier.onFocusChanged { modelFocus = it.isFocused },
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Ascii,
-                imeAction = ImeAction.Next,
-                autoCorrectEnabled = false,
-            ),
-            trailingIcon = if (localModel.isNotEmpty()) {
-                {
-                    IconButton(onClick = {
-                        localModel = ""
-                        viewModel.update { it.copy(aiModel = "") }
-                    }) {
-                        Icon(
-                            painter = painterResource(SerifuIcons.Close),
-                            contentDescription = "Clear model",
-                            tint = c.textSecondary,
-                            modifier = Modifier.size(16.dp),
-                        )
+            GroupLabel(stringResource(R.string.ai_endpoint_label))
+            Spacer(Modifier.height(4.dp))
+            SerifuTextField(
+                value = localEndpoint,
+                onValueChange = { localEndpoint = it },
+                placeholder = stringResource(R.string.ai_endpoint_placeholder),
+                modifier = Modifier.onFocusChanged { endpointFocus = it.isFocused },
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Uri,
+                    imeAction = ImeAction.Done,
+                    autoCorrectEnabled = false,
+                ),
+                trailingIcon = if (localEndpoint.isNotEmpty()) {
+                    {
+                        IconButton(onClick = {
+                            localEndpoint = ""
+                            viewModel.update { it.copy(aiEndpoint = "") }
+                        }) {
+                            Icon(
+                                painter = painterResource(SerifuIcons.Close),
+                                contentDescription = stringResource(R.string.cd_clear_endpoint),
+                                tint = c.textSecondary,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
                     }
-                }
-            } else null,
-        )
-        Spacer(Modifier.height(10.dp))
+                } else null,
+            )
+            if (isGeminiEndpoint(localEndpoint)) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = stringResource(R.string.ai_gemini_model_note),
+                    style = Serifu.type.caption,
+                    color = c.textSecondary,
+                )
+            }
 
-        GroupLabel(stringResource(R.string.ai_endpoint_label))
-        Spacer(Modifier.height(4.dp))
-        SerifuTextField(
-            value = localEndpoint,
-            onValueChange = { localEndpoint = it },
-            placeholder = stringResource(R.string.ai_endpoint_placeholder),
-            modifier = Modifier.onFocusChanged { endpointFocus = it.isFocused },
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Uri,
-                imeAction = ImeAction.Done,
-                autoCorrectEnabled = false,
-            ),
-            trailingIcon = if (localEndpoint.isNotEmpty()) {
-                {
-                    IconButton(onClick = {
-                        localEndpoint = ""
-                        viewModel.update { it.copy(aiEndpoint = "") }
-                    }) {
-                        Icon(
-                            painter = painterResource(SerifuIcons.Close),
-                            contentDescription = "Clear endpoint",
-                            tint = c.textSecondary,
-                            modifier = Modifier.size(16.dp),
-                        )
-                    }
+            Spacer(Modifier.height(14.dp))
+            GroupLabel(stringResource(R.string.reasoning_effort_label))
+            Spacer(Modifier.height(4.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                ReasoningEffort.entries.forEach { effort ->
+                    Pill(
+                        text = effort.label,
+                        selected = settings.reasoningEffort == effort,
+                        onClick = { viewModel.update { it.copy(reasoningEffort = effort) } },
+                    )
                 }
-            } else null,
-        )
-        if (isGeminiEndpoint(localEndpoint)) {
+            }
             Spacer(Modifier.height(6.dp))
             Text(
-                text = stringResource(R.string.ai_gemini_model_note),
+                text = stringResource(R.string.reasoning_effort_desc),
                 style = Serifu.type.caption,
                 color = c.textSecondary,
             )
-        }
 
-        SectionTitle(stringResource(R.string.engine_mlkit))
-        packs.forEachIndexed { index, pack ->
-            SettingLine(
-                label = pack.name,
-                value = stringResource(
-                    if (pack.code in downloaded) R.string.pack_on_phone else R.string.pack_missing,
-                ),
-                showChevron = false,
-                showHairline = index < packs.lastIndex,
-            )
+            if (active.kind == ActiveEngine.Kind.API_PROGRESSIVE) {
+                Spacer(Modifier.height(14.dp))
+                ActiveModelStatusCard(
+                    settings = settings,
+                    onOpenEngine = {},
+                    onOpenLanguages = onOpenLanguages,
+                    showReadyState = false,
+                )
+            }
         }
         Spacer(Modifier.height(24.dp))
     }

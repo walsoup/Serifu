@@ -1,8 +1,6 @@
 package app.walsoup.serifu.ml
 
 import android.content.Context
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
 import android.util.Log
 import app.serifu.core.Tuning
 import app.serifu.core.model.ModelVariant
@@ -13,12 +11,16 @@ import app.serifu.core.translate.ModelFiles
 import app.serifu.core.translate.ModelRoute
 import com.github.luben.zstd.ZstdInputStream
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -28,9 +30,26 @@ import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.IOException
 import java.net.HttpURLConnection
+import java.net.SocketTimeoutException
 import java.net.URL
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.coroutines.coroutineContext
+
+enum class DownloadStage {
+    CATALOG,
+    DOWNLOADING,
+    VERIFYING,
+}
+
+data class BergamotDownloadProgress(
+    val key: String,
+    val downloadedBytes: Long,
+    val totalBytes: Long,
+    val currentFileIndex: Int,
+    val totalFiles: Int,
+    val stage: DownloadStage,
+)
 
 data class BergamotInstalledModel(
     val from: String,
@@ -52,6 +71,7 @@ data class BergamotInstalledModel(
 class BergamotModelManager(
     context: Context,
     private val fetchCatalogBody: (() -> String)? = null,
+    private val fetchFileBytes: (suspend (String) -> ByteArray)? = null,
 ) {
     private val appContext = context.applicationContext
     private val rootDir = File(appContext.filesDir, "bergamot")
@@ -66,12 +86,57 @@ class BergamotModelManager(
     private val _inProgress = MutableStateFlow<Set<String>>(emptySet())
     val inProgressKeys: StateFlow<Set<String>> = _inProgress.asStateFlow()
 
+    private val _downloadProgress = MutableStateFlow<Map<String, BergamotDownloadProgress>>(emptyMap())
+    val downloadProgress: StateFlow<Map<String, BergamotDownloadProgress>> = _downloadProgress.asStateFlow()
+
+    private val _downloadErrors = MutableStateFlow<Map<String, DownloadError>>(emptyMap())
+    val downloadErrors: StateFlow<Map<String, DownloadError>> = _downloadErrors.asStateFlow()
+
+    private val activeRouteJobs = ConcurrentHashMap<String, Job>()
+
     private val _installed = MutableStateFlow<List<BergamotInstalledModel>>(emptyList())
     val installed: StateFlow<List<BergamotInstalledModel>> = _installed.asStateFlow()
 
     init {
         rootDir.mkdirs()
         refreshInstalled()
+    }
+
+    fun isOnWifi(): Boolean = onWifi()
+
+    fun routeStorageKeys(route: ModelRoute): List<String> = when (route) {
+        is ModelRoute.Direct -> listOf(storageKey(route.model.from, route.model.to, route.model.architecture))
+        is ModelRoute.Pivot -> listOf(
+            storageKey(route.first.from, route.first.to, route.first.architecture),
+            storageKey(route.second.from, route.second.to, route.second.architecture),
+        )
+    }
+
+    fun clearRouteErrors(route: ModelRoute) {
+        val keys = routeStorageKeys(route).toSet()
+        _downloadErrors.update { it - keys }
+    }
+
+    fun startDownloadRoute(scope: CoroutineScope, route: ModelRoute, wifiOnly: Boolean): Job {
+        val routeId = routeStorageKeys(route).joinToString("+")
+        activeRouteJobs[routeId]?.cancel()
+        val job = scope.launch {
+            try {
+                downloadRoute(route, wifiOnly)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Throwable) {
+                // Errors are recorded in downloadErrors for the UI.
+            }
+        }
+        activeRouteJobs[routeId] = job
+        job.invokeOnCompletion { activeRouteJobs.remove(routeId, job) }
+        return job
+    }
+
+    fun cancelRouteDownload(route: ModelRoute) {
+        val routeId = routeStorageKeys(route).joinToString("+")
+        activeRouteJobs.remove(routeId)?.cancel()
     }
 
     fun storageKey(from: String, to: String, architecture: String): String =
@@ -199,6 +264,7 @@ class BergamotModelManager(
     }
 
     suspend fun downloadRoute(route: ModelRoute, wifiOnly: Boolean) {
+        clearRouteErrors(route)
         when (route) {
             is ModelRoute.Direct -> downloadModel(route.model, wifiOnly)
             is ModelRoute.Pivot -> {
@@ -209,21 +275,96 @@ class BergamotModelManager(
     }
 
     suspend fun downloadModel(model: ModelFiles, wifiOnly: Boolean) = withContext(Dispatchers.IO) {
+        val key = storageKey(model.from, model.to, model.architecture)
+        _downloadErrors.update { it - key }
         if (wifiOnly && !onWifi()) {
+            val err = DownloadError(DownloadErrorKind.WIFI_REQUIRED, "Wi-Fi required for Bergamot downloads")
+            _downloadErrors.update { it + (key to err) }
             throw IllegalStateException("Wi-Fi required for Bergamot downloads")
         }
-        val key = storageKey(model.from, model.to, model.architecture)
         val lock = downloadLocks.computeIfAbsent(key) { Mutex() }
         lock.withLock {
             _inProgress.update { it + key }
+            val expectedSizes = model.files.map { file -> file.transferBytes.coerceAtLeast(1L) }
+            val totalBytes = expectedSizes.sum().coerceAtLeast(1L)
+            var completedBytes = 0L
             try {
                 val dir = modelDir(model.from, model.to, model.architecture)
                 dir.mkdirs()
-                for (file in model.files) {
-                    ensureFile(dir, file)
+                model.files.forEachIndexed { index, file ->
+                    coroutineContext.ensureActive()
+                    val fileSize = expectedSizes[index]
+                    val fileIndex = index + 1
+                    val totalFiles = model.files.size
+                    _downloadProgress.update {
+                        it + (
+                            key to BergamotDownloadProgress(
+                                key = key,
+                                downloadedBytes = completedBytes,
+                                totalBytes = totalBytes,
+                                currentFileIndex = fileIndex,
+                                totalFiles = totalFiles,
+                                stage = DownloadStage.DOWNLOADING,
+                            )
+                        )
+                    }
+                    ensureFile(
+                        dir = dir,
+                        file = file,
+                        onBytes = { written ->
+                            val currentTotal = (completedBytes + written.coerceAtMost(fileSize)).coerceAtMost(totalBytes)
+                            _downloadProgress.update {
+                                it + (
+                                    key to BergamotDownloadProgress(
+                                        key = key,
+                                        downloadedBytes = currentTotal,
+                                        totalBytes = totalBytes,
+                                        currentFileIndex = fileIndex,
+                                        totalFiles = totalFiles,
+                                        stage = DownloadStage.DOWNLOADING,
+                                    )
+                                )
+                            }
+                        },
+                        onVerifying = {
+                            _downloadProgress.update {
+                                it + (
+                                    key to BergamotDownloadProgress(
+                                        key = key,
+                                        downloadedBytes = (completedBytes + fileSize).coerceAtMost(totalBytes),
+                                        totalBytes = totalBytes,
+                                        currentFileIndex = fileIndex,
+                                        totalFiles = totalFiles,
+                                        stage = DownloadStage.VERIFYING,
+                                    )
+                                )
+                            }
+                        },
+                    )
+                    completedBytes += fileSize
                 }
                 File(dir, "version.txt").writeText(model.version)
+            } catch (timedOut: TimeoutCancellationException) {
+                val err = DownloadError(DownloadErrorKind.TIMEOUT, "Download timed out")
+                _downloadErrors.update { it + (key to err) }
+                throw timedOut
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (timedOut: SocketTimeoutException) {
+                val err = DownloadError(DownloadErrorKind.TIMEOUT, "Download timed out")
+                _downloadErrors.update { it + (key to err) }
+                throw timedOut
+            } catch (verify: ModelVerificationException) {
+                Log.w(TAG, "Verification failed for ${verify.fileName}")
+                val err = DownloadError(DownloadErrorKind.VERIFICATION_FAILED, "Verification failed")
+                _downloadErrors.update { it + (key to err) }
+                throw verify
+            } catch (t: Throwable) {
+                val err = DownloadError(DownloadErrorKind.NETWORK, "Download failed")
+                _downloadErrors.update { it + (key to err) }
+                throw t
             } finally {
+                _downloadProgress.update { it - key }
                 _inProgress.update { it - key }
                 refreshInstalled()
             }
@@ -422,7 +563,7 @@ class BergamotModelManager(
             architecture = architecture,
             version = version,
             files = files,
-            totalBytes = files.sumOf { it.decompressedSize },
+            totalBytes = files.sumOf { it.transferBytes },
         )
     }
 
@@ -458,7 +599,12 @@ class BergamotModelManager(
         else -> null
     }
 
-    private fun ensureFile(dir: File, file: ModelFile) {
+    private suspend fun ensureFile(
+        dir: File,
+        file: ModelFile,
+        onBytes: (Long) -> Unit = {},
+        onVerifying: () -> Unit = {},
+    ) {
         val safeName = sanitizeSegment(file.name)
         val dest = File(dir, safeName)
         check(dest.canonicalPath.startsWith(dir.canonicalPath + File.separator)) {
@@ -470,21 +616,23 @@ class BergamotModelManager(
         val tmp = File(dir, "$safeName.tmp")
         val compressed = File(dir, "$safeName.zst.download")
         try {
-            downloadTo(file.url, compressed)
+            downloadTo(file.url, compressed, onBytes)
+            onVerifying()
             if (file.compressedHash.isNotBlank()) {
                 val compressedDigest = sha256(compressed)
                 if (!compressedDigest.equals(file.compressedHash, ignoreCase = true)) {
-                    throw IllegalStateException(
+                    Log.w(
+                        TAG,
                         "SHA-256 mismatch for ${file.name}.zst: expected ${file.compressedHash}, got $compressedDigest",
                     )
+                    throw ModelVerificationException(file.name)
                 }
             }
             decompressZstd(compressed, tmp, file.decompressedSize)
             val digest = sha256(tmp)
             if (!digest.equals(file.decompressedHash, ignoreCase = true)) {
-                throw IllegalStateException(
-                    "SHA-256 mismatch for ${file.name}: expected ${file.decompressedHash}, got $digest",
-                )
+                Log.w(TAG, "SHA-256 mismatch for ${file.name}: expected ${file.decompressedHash}, got $digest")
+                throw ModelVerificationException(file.name)
             }
             if (dest.exists()) dest.delete()
             if (!tmp.renameTo(dest)) {
@@ -497,7 +645,15 @@ class BergamotModelManager(
         }
     }
 
-    private fun downloadTo(url: String, dest: File) {
+    private suspend fun downloadTo(url: String, dest: File, onBytes: (Long) -> Unit = {}) {
+        val injected = fetchFileBytes
+        if (injected != null) {
+            val bytes = injected(url)
+            dest.parentFile?.mkdirs()
+            dest.writeBytes(bytes)
+            onBytes(bytes.size.toLong())
+            return
+        }
         dest.parentFile?.mkdirs()
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {
             connectTimeout = 30_000
@@ -513,7 +669,22 @@ class BergamotModelManager(
             }
             connection.inputStream.use { input ->
                 FileOutputStream(dest).use { output ->
-                    input.copyTo(output)
+                    val buffer = ByteArray(32 * 1024)
+                    var total = 0L
+                    var lastEmitAt = 0L
+                    while (true) {
+                        coroutineContext.ensureActive()
+                        val read = input.read(buffer)
+                        if (read <= 0) break
+                        output.write(buffer, 0, read)
+                        total += read
+                        val now = System.currentTimeMillis()
+                        if (now - lastEmitAt >= 100L) {
+                            lastEmitAt = now
+                            onBytes(total)
+                        }
+                    }
+                    onBytes(total)
                 }
             }
         } finally {
@@ -521,13 +692,14 @@ class BergamotModelManager(
         }
     }
 
-    private fun decompressZstd(input: File, output: File, maxBytes: Long = 0L) {
+    private suspend fun decompressZstd(input: File, output: File, maxBytes: Long = 0L) {
         val maxAllowed = if (maxBytes > 0) (maxBytes * 1.1 + 4096).toLong() else Long.MAX_VALUE
         ZstdInputStream(FileInputStream(input)).use { zstd ->
             FileOutputStream(output).use { out ->
                 val buffer = ByteArray(64 * 1024)
                 var totalRead = 0L
                 while (true) {
+                    coroutineContext.ensureActive()
                     val read = zstd.read(buffer)
                     if (read <= 0) break
                     totalRead += read
@@ -555,12 +727,63 @@ class BergamotModelManager(
         return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
-    private fun onWifi(): Boolean {
-        val cm = appContext.getSystemService(ConnectivityManager::class.java) ?: return false
-        val network = cm.activeNetwork ?: return false
-        val caps = cm.getNetworkCapabilities(network) ?: return false
-        return caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+    private fun onWifi(): Boolean = NetworkStatus.isUnmetered(appContext)
+
+    /**
+     * Download progress for a route. Pivot routes add finished legs so the bar
+     * does not jump back to zero when the second model starts.
+     */
+    fun routeProgress(
+        route: ModelRoute,
+        progress: Map<String, BergamotDownloadProgress>,
+        readyKeys: Set<String>,
+    ): BergamotDownloadProgress? {
+        val legs = when (route) {
+            is ModelRoute.Direct -> listOf(route.model)
+            is ModelRoute.Pivot -> listOf(route.first, route.second)
+        }
+        val keys = routeStorageKeys(route)
+        if (keys.size != legs.size || keys.none { progress[it] != null }) return null
+        var downloaded = 0L
+        var total = 0L
+        var filesBefore = 0
+        var totalFiles = 0
+        var currentFile = 1
+        var stage = DownloadStage.DOWNLOADING
+        var activeKey = keys.first()
+        legs.forEachIndexed { index, model ->
+            val key = keys[index]
+            val legBytes = model.transferBytes.coerceAtLeast(1L)
+            val legFiles = model.files.size.coerceAtLeast(1)
+            total += legBytes
+            totalFiles += legFiles
+            val current = progress[key]
+            when {
+                current != null -> {
+                    downloaded += current.downloadedBytes.coerceAtMost(legBytes)
+                    currentFile = (filesBefore + current.currentFileIndex).coerceAtLeast(1)
+                    stage = current.stage
+                    activeKey = key
+                }
+                key in readyKeys -> {
+                    downloaded += legBytes
+                    filesBefore += legFiles
+                }
+            }
+        }
+        val totalBytes = total.coerceAtLeast(1L)
+        val files = totalFiles.coerceAtLeast(1)
+        return BergamotDownloadProgress(
+            key = activeKey,
+            downloadedBytes = downloaded.coerceAtMost(totalBytes),
+            totalBytes = totalBytes,
+            currentFileIndex = currentFile.coerceIn(1, files),
+            totalFiles = files,
+            stage = stage,
+        )
     }
+
+    private class ModelVerificationException(val fileName: String) : Exception()
 
     private class CatalogCache(val catalog: Catalog, val fetchedAt: Long)
 

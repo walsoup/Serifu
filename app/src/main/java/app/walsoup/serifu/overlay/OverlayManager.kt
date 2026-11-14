@@ -146,17 +146,32 @@ class OverlayManager(
         remove(hud)
     }
 
-    fun showTooltip(message: String) {
+    fun showTooltip(message: String, onClick: (() -> Unit)? = null) {
         tooltip.setMessage(message)
+        if (onClick != null) {
+            tooltip.isClickable = true
+            tooltip.setOnClickListener {
+                dismissTooltip()
+                onClick()
+            }
+        } else {
+            tooltip.setOnClickListener(null)
+            tooltip.isClickable = false
+        }
         val pillRect = pillRectOnScreen() ?: return
         val geo = geometry()
         tooltip.tailOnEnd = pillRect.centerX >= geo.width / 2
         val width = tooltip.measuredWidthPx()
         val height = tooltip.measuredHeightPx()
+        val flags = if (onClick != null) {
+            FLAG_NOT_FOCUSABLE or FLAG_NOT_TOUCH_MODAL or FLAG_LAYOUT_IN_SCREEN or FLAG_LAYOUT_NO_LIMITS
+        } else {
+            FLAG_NOT_FOCUSABLE or FLAG_NOT_TOUCHABLE or FLAG_LAYOUT_IN_SCREEN or FLAG_LAYOUT_NO_LIMITS
+        }
         val params = window(
             width,
             height,
-            FLAG_NOT_FOCUSABLE or FLAG_NOT_TOUCHABLE or FLAG_LAYOUT_IN_SCREEN or FLAG_LAYOUT_NO_LIMITS,
+            flags,
         )
         val gap = service.dp(8)
         params.x = if (tooltip.tailOnEnd) pillRect.left - width - gap else pillRect.right + gap
@@ -171,6 +186,8 @@ class OverlayManager(
 
     fun dismissTooltip() {
         tooltip.removeCallbacks(tooltipDismiss)
+        tooltip.setOnClickListener(null)
+        tooltip.isClickable = false
         remove(tooltip)
     }
 

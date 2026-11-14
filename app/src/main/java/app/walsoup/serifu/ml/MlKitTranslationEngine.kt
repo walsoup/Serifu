@@ -19,7 +19,17 @@ import com.google.mlkit.nl.translate.Translator
 import com.google.mlkit.nl.translate.TranslatorOptions
 import kotlinx.coroutines.tasks.await
 
-class TranslationUnavailable(val languageName: String) : RuntimeException(languageName)
+enum class UnavailableReason {
+    MISSING_PACK,
+    WIFI_REQUIRED,
+    NETWORK,
+    TIMEOUT,
+}
+
+class TranslationUnavailable(
+    val languageName: String,
+    val reason: UnavailableReason = UnavailableReason.MISSING_PACK,
+) : RuntimeException(languageName)
 
 /**
  * On-device ML Kit translation. Tasks cannot be cancelled; callers drop stale generations.
@@ -28,6 +38,7 @@ class TranslationUnavailable(val languageName: String) : RuntimeException(langua
 class MlKitTranslationEngine(
     private val cache: TranslationCache = TranslationCache(),
     private val wifiOnly: () -> Boolean = { true },
+    private val isOnUnmeteredNetwork: () -> Boolean = { true },
     private val clock: () -> Long = SystemClock::uptimeMillis,
 ) : TranslationEngine {
     private val slots = HashMap<String, Slot>()
@@ -79,12 +90,12 @@ class MlKitTranslationEngine(
                     "download timed out after ${Tuning.MLKIT_DOWNLOAD_TIMEOUT_MS}ms " +
                         "(${request.source.tag}, wifiOnly=${wifiOnly()})",
                 )
-                throw TranslationUnavailable(request.source.englishName)
+                throw TranslationUnavailable(request.source.englishName, failureReason(timedOut = true))
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled
             } catch (t: Throwable) {
                 android.util.Log.e("MlKitTranslate", "downloadModelIfNeeded failed", t)
-                throw TranslationUnavailable(request.source.englishName)
+                throw TranslationUnavailable(request.source.englishName, failureReason(timedOut = false))
             }
             val fresh = ArrayList<Attempt>(pending.size)
             for (bubble in pending) {
@@ -104,6 +115,11 @@ class MlKitTranslationEngine(
     override fun close() {
         slots.values.forEach { it.translator.close() }
         slots.clear()
+    }
+
+    private fun failureReason(timedOut: Boolean): UnavailableReason {
+        if (wifiOnly() && !isOnUnmeteredNetwork()) return UnavailableReason.WIFI_REQUIRED
+        return if (timedOut) UnavailableReason.TIMEOUT else UnavailableReason.MISSING_PACK
     }
 
     private fun evictIdle(now: Long) {

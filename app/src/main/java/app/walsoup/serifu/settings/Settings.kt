@@ -39,4 +39,59 @@ data class Settings(
     val aiModel: String = "gpt-4o-mini",
     val aiEndpoint: String = "",
     val reasoningEffort: ReasoningEffort = ReasoningEffort.AUTO,
-)
+) {
+    val apiConfigured: Boolean
+        get() = aiApiKey.isNotBlank() || aiEndpoint.isNotBlank()
+
+    /**
+     * Translator the UI should treat as active. Progressive mode keeps the
+     * selected on-device engine for the fast draft and still requires an API
+     * key for the upgrade. API-only does not.
+     */
+    val activeEngine: ActiveEngine
+        get() = ActiveEngine.from(this)
+}
+
+data class ActiveEngine(
+    val kind: Kind,
+    val apiConfigured: Boolean,
+    val onDevice: OnDeviceEngine,
+) {
+    enum class Kind {
+        ML_KIT,
+        BERGAMOT,
+        API_ONLY,
+        API_PROGRESSIVE,
+    }
+
+    val usesApi: Boolean
+        get() = kind == Kind.API_ONLY || kind == Kind.API_PROGRESSIVE
+
+    val apiOnly: Boolean
+        get() = kind == Kind.API_ONLY
+
+    /** On-device Bergamot draft, including progressive mode. */
+    val usingBergamot: Boolean
+        get() = kind != Kind.API_ONLY && onDevice == OnDeviceEngine.BERGAMOT
+
+    /** On-device ML Kit draft, including progressive mode. */
+    val usingMlKit: Boolean
+        get() = kind != Kind.API_ONLY && onDevice == OnDeviceEngine.MLKIT
+
+    val needsApiKey: Boolean
+        get() = usesApi && !apiConfigured
+
+    companion object {
+        fun from(settings: Settings): ActiveEngine {
+            val kind = when (settings.quality) {
+                QualityMode.BEST_ONLY -> Kind.API_ONLY
+                QualityMode.BEST_PROGRESSIVE -> Kind.API_PROGRESSIVE
+                QualityMode.FAST -> when (settings.onDeviceEngine) {
+                    OnDeviceEngine.BERGAMOT -> Kind.BERGAMOT
+                    OnDeviceEngine.MLKIT -> Kind.ML_KIT
+                }
+            }
+            return ActiveEngine(kind, settings.apiConfigured, settings.onDeviceEngine)
+        }
+    }
+}

@@ -3,10 +3,12 @@ package app.walsoup.serifu.ui.design
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 import app.walsoup.serifu.R
+import app.walsoup.serifu.settings.ActiveEngine
 import app.serifu.core.model.LetteringFont
 import app.serifu.core.model.SfxMode
 import app.serifu.core.model.TargetLanguage
 import app.serifu.core.model.TriggerMode
+import app.walsoup.serifu.settings.Settings
 
 /** Full font name, for rows and previews. */
 val LetteringFont.fullName: String
@@ -46,3 +48,13 @@ fun TriggerMode.hint(): String = stringResource(
 )
 
 fun targetName(tag: String): String = TargetLanguage.fromTag(tag).englishName
+
+@Composable
+fun engineSummaryLabel(settings: Settings, bergamotReady: Boolean): String = when (settings.activeEngine.kind) {
+    ActiveEngine.Kind.BERGAMOT -> stringResource(
+        if (bergamotReady) R.string.engine_on_device_bergamot else R.string.engine_on_device_bergamot_fallback,
+    )
+    ActiveEngine.Kind.ML_KIT -> stringResource(R.string.engine_on_device_mlkit)
+    ActiveEngine.Kind.API_PROGRESSIVE -> stringResource(R.string.engine_on_device_api_progressive)
+    ActiveEngine.Kind.API_ONLY -> stringResource(R.string.engine_api)
+}

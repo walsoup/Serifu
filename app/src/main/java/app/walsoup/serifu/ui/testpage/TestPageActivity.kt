@@ -47,6 +47,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -55,11 +56,14 @@ import app.walsoup.serifu.SerifuApp
 import app.serifu.core.coordinator.Event
 import app.serifu.core.model.SourceLanguage
 import app.serifu.core.model.TriggerMode
+import app.walsoup.serifu.ml.LanguageModelManager
 import app.walsoup.serifu.service.EventRouter
 import app.walsoup.serifu.service.SerifuAccessibilityService
 import app.walsoup.serifu.settings.Settings
 import app.walsoup.serifu.ui.design.Pill
 import app.walsoup.serifu.ui.design.Serifu
+import app.walsoup.serifu.ui.design.SerifuProgressBar
+import app.walsoup.serifu.ui.design.targetName
 import app.walsoup.serifu.ui.theme.SerifuTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -127,7 +131,7 @@ private fun ReaderPage(
     onBack: () -> Unit,
     onEnableAccessibility: () -> Unit,
 ) {
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalContext.current
     val app = context.applicationContext as? SerifuApp
     val scope = rememberCoroutineScope()
     val settingsState by (app?.settingsRepository?.settings ?: MutableStateFlow(Settings()))
@@ -135,6 +139,11 @@ private fun ReaderPage(
     val settings = settingsState ?: Settings()
     val isServiceActive by (app?.isServiceActive ?: MutableStateFlow(true))
         .collectAsState(initial = true)
+    val downloadedCodes by LanguageModelManager.downloadedCodes.collectAsState()
+    val inProgressCodes by LanguageModelManager.inProgressCodes.collectAsState()
+    LaunchedEffect(Unit) {
+        LanguageModelManager.refreshDownloaded()
+    }
     var viewMode by remember {
         mutableStateOf(
             if (requestedLanguage != null || startBottom) MangaViewMode.STICK_SAMPLE else MangaViewMode.BLACK_JACK
@@ -256,7 +265,7 @@ private fun ReaderPage(
                                     kotlinx.coroutines.delay(350)
                                     service.coordinator?.onPillTap()
                                 }
-                            } else {
+                            } else if (!isServiceActive) {
                                 onEnableAccessibility()
                             }
                         },
@@ -281,7 +290,71 @@ private fun ReaderPage(
                         color = c.primaryText,
                         modifier = Modifier.padding(horizontal = 4.dp),
                     )
+                } else {
+                    val coordinatorReady = SerifuAccessibilityService.instance?.coordinator != null
+                    val neededCodes = listOf(selectedLanguage.tag, settings.targetLanguage).distinct()
+                    val missingCodes = neededCodes.filter { it !in downloadedCodes }
+                    val downloading = neededCodes.any { it in inProgressCodes }
+                    val usingMlKit = settings.activeEngine.usingMlKit
+
+                    if (!coordinatorReady) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = stringResource(R.string.sample_service_starting),
+                            style = Serifu.type.caption,
+                            color = c.primaryText,
+                            modifier = Modifier.padding(horizontal = 4.dp),
+                        )
+                    } else if (usingMlKit && downloading) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = stringResource(R.string.sample_downloading_hint, selectedLanguage.englishName),
+                            style = Serifu.type.caption,
+                            color = c.primaryText,
+                            modifier = Modifier.padding(horizontal = 4.dp),
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        SerifuProgressBar(progress = null, height = 3.dp)
+                    } else if (usingMlKit && missingCodes.isNotEmpty() && app != null) {
+                        Spacer(Modifier.height(8.dp))
+                        Row(
+                            Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text(
+                                text = stringResource(
+                                    R.string.sample_missing_pack_hint,
+                                    selectedLanguage.englishName,
+                                    targetName(settings.targetLanguage),
+                                ),
+                                style = Serifu.type.caption,
+                                color = c.primaryText,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Pill(
+                                text = stringResource(R.string.sample_open_languages),
+                                selected = true,
+                                onClick = {
+                                    LanguageModelManager.startDownload(
+                                        app.appScope,
+                                        missingCodes.toSet(),
+                                        settings.wifiOnlyDownloads,
+                                        context,
+                                    )
+                                },
+                            )
+                        }
+                    }
                 }
+
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = stringResource(R.string.sample_toolbar_tip),
+                    style = Serifu.type.caption,
+                    color = c.textSecondary,
+                    modifier = Modifier.padding(horizontal = 4.dp),
+                )
 
                 Spacer(Modifier.height(8.dp))
                 Row(

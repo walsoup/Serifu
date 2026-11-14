@@ -22,4 +22,8 @@ class HomeViewModel(private val repository: SettingsRepository) : ViewModel() {
     fun update(transform: (Settings) -> Settings) {
         viewModelScope.launch { repository.update(transform) }
     }
+
+    suspend fun updateAndCommit(transform: (Settings) -> Settings) {
+        repository.update(transform)
+    }
 }
