@@ -125,7 +125,7 @@ class TestPageActivity : ComponentActivity() {
 }
 
 @Composable
-private fun ReaderPage(
+internal fun ReaderPage(
     startBottom: Boolean,
     requestedLanguage: SourceLanguage?,
     onBack: () -> Unit,

@@ -8,6 +8,11 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+// Opt-in JVM screen renders. Absent, :app:testDebugUnitTest stays the existing unit-test task.
+// Named to avoid AGP's screenshotTests source-set container.
+val jvmScreenRenders = providers.gradleProperty("serifu.screenshots").orNull == "true"
+val screenshotSkipNative = providers.gradleProperty("serifu.skipNative").orNull == "true"
+
 /** Local signing values from `.env`. Missing file means the release build stays on the debug key. */
 fun loadDotEnv(file: java.io.File): Map<String, String> {
     if (!file.exists()) return emptyMap()
@@ -51,8 +56,10 @@ android {
 
     buildTypes {
         debug {
-            ndk {
-                abiFilters += listOf("arm64-v8a", "x86_64")
+            if (!screenshotSkipNative) {
+                ndk {
+                    abiFilters += listOf("arm64-v8a", "x86_64")
+                }
             }
         }
         release {
@@ -67,8 +74,10 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            ndk {
-                abiFilters += "arm64-v8a"
+            if (!screenshotSkipNative) {
+                ndk {
+                    abiFilters += "arm64-v8a"
+                }
             }
         }
     }
@@ -94,8 +103,51 @@ android {
         abortOnError = true
     }
 
+    if (jvmScreenRenders) {
+        val screenshotSrc = layout.projectDirectory.dir("src/screenshot/java").asFile.absolutePath
+        sourceSets.getByName("test").java.directories.add(screenshotSrc)
+        sourceSets.getByName("test").kotlin.directories.add(screenshotSrc)
+    }
+
     testOptions {
         unitTests.isIncludeAndroidResources = true
+        if (jvmScreenRenders) {
+            unitTests.isReturnDefaultValues = true
+            unitTests.all { test ->
+                if (test.name != "testDebugUnitTest") return@all
+                test.maxHeapSize = "2g"
+                test.systemProperty("serifu.screenshot.dir", layout.buildDirectory.dir("outputs/screenshots").get().asFile.absolutePath)
+                test.systemProperty("serifu.screenshot.expected", rootProject.file(".github/screenshots/expected.txt").absolutePath)
+                test.systemProperty("roborazzi.test.record", "true")
+                test.systemProperty("robolectric.pixelCopyRenderMode", "hardware")
+                test.systemProperty("robolectric.graphicsMode", "NATIVE")
+                test.jvmArgs(
+                    "--add-opens=java.base/java.lang=ALL-UNNAMED",
+                    "--add-opens=java.base/java.lang.reflect=ALL-UNNAMED",
+                    "--add-opens=java.base/java.io=ALL-UNNAMED",
+                    "--add-opens=java.base/java.util=ALL-UNNAMED",
+                    "--add-opens=java.base/jdk.internal.access=ALL-UNNAMED",
+                )
+                test.filter.setIncludePatterns("app.walsoup.serifu.screenshots.*")
+                test.filter.isFailOnNoMatchingTests = true
+            }
+        }
+    }
+}
+
+if (jvmScreenRenders) {
+    tasks.matching { it.name == "testDebugUnitTest" }.configureEach {
+        finalizedBy("writeScreenGallery")
+    }
+    tasks.register("writeScreenGallery") {
+        doLast {
+            val exit = ProcessBuilder("python3", ".github/screenshots/gallery.py", "--allow-missing")
+                .directory(rootProject.projectDir)
+                .inheritIO()
+                .start()
+                .waitFor()
+            if (exit != 0) error("gallery.py exited $exit")
+        }
     }
 }
 
@@ -138,6 +190,13 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.kotlin.test)
     testImplementation(libs.robolectric)
+    if (jvmScreenRenders) {
+        testImplementation(platform(libs.compose.bom))
+        testImplementation(libs.compose.ui.test.junit4)
+        testImplementation(libs.androidx.test.core)
+        testImplementation(libs.roborazzi)
+        testImplementation(libs.roborazzi.compose)
+    }
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.test.core)
     androidTestImplementation(libs.espresso.core)
