@@ -22,11 +22,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      # Robolectric 4.17's Android 36 jar requires Java 21. The app still
+      # compiles for 17, and the existing CI workflow stays on JDK 17.
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
           cache: gradle
 
       - name: Accept Android SDK licenses

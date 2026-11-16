@@ -86,7 +86,7 @@ The JVM tests cover bubble detection and cleanup, lettering fit, the translation
 
 ## Screen renders
 
-The Screenshots workflow draws the production Compose screens on the JVM with Roborazzi and Robolectric native graphics, in light and dark. It does not start an emulator, and it records PNGs for a gallery rather than comparing them to a baseline.
+The Screenshots workflow draws the production Compose screens on the JVM with Roborazzi and Robolectric native graphics, in light and dark. It does not start an emulator, and it records PNGs for a gallery rather than comparing them to a baseline. That job uses JDK 21 because Robolectric 4.17's Android 36 jar requires it. The app still compiles for 17.
 
 ```
 ./gradlew :app:testDebugUnitTest -Pserifu.screenshots=true -Pserifu.skipNative=true -Proborazzi.test.record=true

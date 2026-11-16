@@ -74,7 +74,8 @@ import org.robolectric.annotation.GraphicsMode
  *
  * SDK 36, and a new activity per capture: on Robolectric 4.17, SDK 37 PixelCopy
  * keeps the first frame and later captures of that window come back unchanged
- * (https://github.com/robolectric/robolectric/issues/11392).
+ * (https://github.com/robolectric/robolectric/issues/11392). Robolectric's
+ * Android 36 jar requires Java 21.
  */
 @OptIn(ExperimentalRoborazziApi::class)
 @RunWith(RobolectricTestRunner::class)
