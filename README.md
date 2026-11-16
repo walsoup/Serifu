@@ -84,6 +84,17 @@ Three Gradle modules: `:core` (plain Kotlin, no Android imports), `:app` (the ph
 
 The JVM tests cover bubble detection and cleanup, lettering fit, the translation cache and prompt handling, and the reading loop. The device test opens the sample page, translates it, and checks that lettering lands inside the bubbles.
 
+## Screen renders
+
+The Screenshots workflow draws the production Compose screens on the JVM with Roborazzi and Robolectric native graphics, in light and dark. It does not start an emulator, and it records PNGs for a gallery rather than comparing them to a baseline. That job uses JDK 21 because Robolectric 4.17's Android 36 jar requires it. The app still compiles for 17.
+
+```
+./gradlew :app:testDebugUnitTest -Pserifu.screenshots=true -Pserifu.skipNative=true -Proborazzi.test.record=true
+python3 .github/screenshots/gallery.py
+```
+
+PNGs and `index.html` are written to `app/build/outputs/screenshots/`. On GitHub, open the `screen-renders` artifact from the Screenshots workflow: it contains that gallery plus the test logs, including when the job fails.
+
 ## Build
 
 Needs JDK 17 and the Android NDK (r28). Clone with submodules:

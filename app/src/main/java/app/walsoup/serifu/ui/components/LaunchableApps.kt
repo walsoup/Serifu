@@ -8,6 +8,7 @@ import android.os.Build
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
@@ -37,9 +38,17 @@ fun loadLaunchableApps(context: Context): List<LaunchableApp> {
     }.distinctBy { it.packageName }
 }
 
+/**
+ * Screenshot tests set this so reader lists stay on a fixed fixture instead of
+ * querying whatever packages the device happens to expose. Null keeps the
+ * package-manager lookup.
+ */
+val LocalLaunchableAppsOverride = staticCompositionLocalOf<List<LaunchableApp>?> { null }
+
 /** Loads launchable apps off the main thread; empty until loaded. */
 @Composable
 fun rememberLaunchableApps(): List<LaunchableApp> {
+    LocalLaunchableAppsOverride.current?.let { return it }
     val context = LocalContext.current
     val apps by produceState(emptyList(), context) {
         value = withContext(Dispatchers.IO) { loadLaunchableApps(context) }

@@ -12,6 +12,10 @@ coroutines = "1.11.0"
 serialization = "1.12.0"
 junit = "4.13.2"
 robolectric = "4.17"
+# Roborazzi 1.79.0 (2026-11-12). Compose screenshots use Robolectric native graphics.
+# AGP 9 support has been in the project since 1.56.0. The Gradle plugin is not applied;
+# screenshot runs set roborazzi.test.record and call captureRoboImage directly.
+roborazzi = "1.79.0"
 androidxJunit = "1.3.0"
 androidxTestCore = "1.6.1"
 espresso = "3.7.0"
@@ -46,6 +50,8 @@ kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-
 kotlin-test = { group = "org.jetbrains.kotlin", name = "kotlin-test", version.ref = "kotlin" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
+roborazzi = { group = "io.github.takahirom.roborazzi", name = "roborazzi", version.ref = "roborazzi" }
+roborazzi-compose = { group = "io.github.takahirom.roborazzi", name = "roborazzi-compose", version.ref = "roborazzi" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidxJunit" }
 androidx-test-core = { group = "androidx.test", name = "core", version.ref = "androidxTestCore" }
 espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espresso" }
