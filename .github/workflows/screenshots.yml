@@ -2,7 +2,7 @@ name: Screenshots
 
 on:
   push:
-    branches: [main]
+    branches: [main, feat/ui-rebuild]
   pull_request:
   workflow_dispatch:
 
