@@ -22,7 +22,7 @@
     <string name="turn_on_overlay">Turn on overlay</string>
     <string name="turn_off_overlay">Turn off overlay</string>
     <string name="home_hint">Finish setup, then allow Serifu under Accessibility. The pill shows up on the edge of your reader.</string>
-    <string name="home_active_hint">The floating pill attaches to reader apps when opened.</string>
+    <string name="home_active_hint">Open your reader app — the Serifu pill sits at the screen edge. Tap it to letter the page, hold it for options.</string>
     <string name="home_off_hint">Tap Turn on below to activate the translation overlay.</string>
     <string name="home_footer">On-device OCR · Zero cloud calls by default · API engine optional</string>
     <string name="engine_mlkit">On-Device ML Kit</string>
@@ -132,7 +132,7 @@
     <string name="engine_ai_title">API configuration</string>
     <string name="engine_ai_body">Translate with any OpenAI-compatible endpoint. For local runners (Ollama, LM Studio), leave the API key blank.</string>
     <string name="engine_api_title">API configuration</string>
-    <string name="engine_api_body">Translate with any OpenAI-compatible endpoint. For local runners (Ollama, LM Studio), leave the API key blank.</string>
+    <string name="engine_api_body">For local runners (Ollama, LM Studio), leave the API key blank.</string>
     <string name="ai_api_key_label">API Key</string>
     <string name="ai_api_key_placeholder">sk-... (optional for local models)</string>
     <string name="ai_model_label">Model Name</string>
@@ -252,6 +252,7 @@
     <string name="cancel">Cancel</string>
     <string name="languages_label">Languages</string>
     <string name="behaviour_label">Behaviour</string>
+    <string name="behaviour_settle_summary">Letters %1$d ms after you stop scrolling</string>
     <string name="lettering_label">Lettering</string>
     <string name="direction_format">%1$s \u2192 %2$s</string>
     <string name="trigger_auto">Auto</string>
