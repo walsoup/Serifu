@@ -339,8 +339,7 @@ fun HomeScreen(viewModel: HomeViewModel, onNavigate: (String) -> Unit) {
             )
             SettingLine(
                 label = stringResource(R.string.behaviour_label),
-                value = "${settings.settleDelayMs} ms",
-                mono = true,
+                value = stringResource(R.string.behaviour_settle_summary, settings.settleDelayMs),
                 onClick = { onNavigate(Routes.Behaviour) },
             )
             val engineValue = engineSummaryLabel(settings, bergamotReady = bergamotReady)
