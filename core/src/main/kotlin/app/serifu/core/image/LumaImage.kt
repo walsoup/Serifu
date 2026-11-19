@@ -15,13 +15,23 @@ class LumaImage(
         }
     }
 
-    operator fun get(x: Int, y: Int): Int = bytes[y * width + x].toInt() and 0xFF
+    operator fun get(x: Int, y: Int): Int {
+        require(x in 0 until width && y in 0 until height) {
+            "luma read ($x,$y) outside ${width}x$height"
+        }
+        return bytes[y * width + x].toInt() and 0xFF
+    }
 }
 
 object LumaMath {
     fun of(red: Int, green: Int, blue: Int): Int =
         (Tuning.LUMA_R * red + Tuning.LUMA_G * green + Tuning.LUMA_B * blue) shr 8
 
+    /**
+     * @param reuse when exactly the output size, it becomes the image's backing
+     *   store (aliased, not copied). The caller must not touch it afterwards;
+     *   the :app frame converter pools these buffers across frames.
+     */
     fun boxDownsample(
         pixels: IntArray,
         width: Int,

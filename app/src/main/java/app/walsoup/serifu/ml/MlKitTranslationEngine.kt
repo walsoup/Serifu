@@ -97,9 +97,10 @@ class MlKitTranslationEngine(
                 android.util.Log.e("MlKitTranslate", "downloadModelIfNeeded failed", t)
                 throw TranslationUnavailable(request.source.englishName, failureReason(timedOut = false))
             }
+            val pageStarted = clock()
             val fresh = ArrayList<Attempt>(pending.size)
             for (bubble in pending) {
-                fresh.add(translateBubble(slot, bubble))
+                fresh.add(translateBubble(slot, bubble, pageStarted))
             }
             for (attempt in fresh) {
                 if (attempt.text.isEmpty()) continue
@@ -127,7 +128,15 @@ class MlKitTranslationEngine(
         for (key in stale) slots.remove(key)?.translator?.close()
     }
 
-    private suspend fun translateBubble(slot: Slot, bubble: app.serifu.core.translate.BubbleText): Attempt {
+    private suspend fun translateBubble(
+        slot: Slot,
+        bubble: app.serifu.core.translate.BubbleText,
+        pageStarted: Long,
+    ): Attempt {
+        if (!slot.warm && clock() - pageStarted >= Tuning.MLKIT_PAGE_COLD_TIMEOUT_MS) {
+            android.util.Log.w("MlKitTranslate", "page cold budget spent; leaving [${bubble.id}] untranslated")
+            return Attempt(bubble.id, bubble.text, cacheable = false)
+        }
         val budget = if (slot.warm) Tuning.MLKIT_TRANSLATE_TIMEOUT_MS else Tuning.MLKIT_TRANSLATE_COLD_TIMEOUT_MS
         return try {
             val text = kotlinx.coroutines.withTimeoutOrNull(budget) {

@@ -24,7 +24,14 @@ object KnownReaders {
         "org.mozilla.firefox",
     )
 
-    fun installed(context: Context): Set<String> = packages.filter { pkg ->
+    /** Browsers stay listed as known but are never auto-enabled: any web page
+     * would otherwise get capture in AUTO mode on first run. Explicit opt-in. */
+    val browsers: Set<String> = setOf("com.android.chrome", "org.mozilla.firefox")
+
+    /** Auto-seeded on first run: manga readers only, never browsers. */
+    val autoSeed: List<String> = packages.filter { it !in browsers }
+
+    fun installed(context: Context): Set<String> = autoSeed.filter { pkg ->
         try {
             if (Build.VERSION.SDK_INT >= 33) {
                 context.packageManager.getPackageInfo(pkg, PackageManager.PackageInfoFlags.of(0))
@@ -42,15 +49,30 @@ object KnownReaders {
 class SettingsRepository(
     private val context: Context,
     scope: CoroutineScope,
+    private val crypto: ApiKeyCrypto = ApiKeyCrypto(context),
 ) {
     val settings: StateFlow<Settings?> = context.serifuSettingsDataStore.data
-        .map { prefs -> prefs.toSettings(KnownReaders.installed(context)) }
+        .map { prefs -> prefs.toSettings(KnownReaders.installed(context), crypto::decrypt) }
         .stateIn(scope, SharingStarted.Eagerly, null)
 
     suspend fun update(transform: (Settings) -> Settings) {
         context.serifuSettingsDataStore.edit { prefs ->
-            val current = prefs.toSettings(KnownReaders.installed(context))
-            transform(current).writeTo(prefs)
+            val rawStored = prefs[SettingsKeys.aiApiKey]
+            val decryptResult = crypto.decryptResult(rawStored)
+            val currentPlaintext = when (decryptResult) {
+                is ApiKeyCrypto.Result.Success -> decryptResult.plaintext
+                is ApiKeyCrypto.Result.Empty, is ApiKeyCrypto.Result.Error -> ""
+            }
+            val current = prefs.toSettings(KnownReaders.installed(context)) { currentPlaintext }
+            val next = transform(current)
+
+            // If decryption failed, and the caller didn't explicitly change the key from currentPlaintext (""),
+            // preserve the raw stored ciphertext rather than overwriting it with an encrypted blank string.
+            val shouldPreserveKey = decryptResult is ApiKeyCrypto.Result.Error && next.aiApiKey == currentPlaintext
+
+            next.writeTo(prefs) { plainKey ->
+                if (shouldPreserveKey) rawStored.orEmpty() else crypto.encrypt(plainKey)
+            }
         }
     }
 }

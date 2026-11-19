@@ -58,6 +58,24 @@ class FuriganaFilterTest {
     }
 
     @Test
+    fun degenerateBoxesAreKept() {
+        val main = line(
+            app.serifu.core.geometry.IntRect(100, 20, 140, 200),
+            40f, Orientation.VERTICAL, "先輩",
+        )
+        val empty = line(
+            app.serifu.core.geometry.IntRect(140, 40, 140, 100),
+            15f, Orientation.VERTICAL, "せんぱい",
+        )
+        val flat = line(
+            app.serifu.core.geometry.IntRect(140, 40, 155, 40),
+            15f, Orientation.VERTICAL, "せんぱい",
+        )
+        val result = FuriganaFilter.filter(listOf(main, empty, flat))
+        assertEquals(3, result.kept.size)
+    }
+
+    @Test
     fun horizontalFuriganaAboveIsDropped() {
         val main = line(
             app.serifu.core.geometry.IntRect(20, 100, 200, 140),

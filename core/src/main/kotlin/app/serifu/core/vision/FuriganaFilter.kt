@@ -41,6 +41,7 @@ object FuriganaFilter {
     }
 
     private fun isFuriganaOf(f: FilteredLine, m: FilteredLine): Boolean {
+        if (f.line.box.width <= 0 || f.line.box.height <= 0) return false
         if (f.charSize >= Tuning.FURIGANA_SIZE_RATIO * m.charSize) return false
         val verticalMain = m.orientation == Orientation.VERTICAL ||
             (m.orientation == Orientation.UNKNOWN && f.orientation == Orientation.VERTICAL)

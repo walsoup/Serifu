@@ -1,7 +1,5 @@
 package app.serifu.core.coordinator
 
-import app.serifu.core.model.TriggerMode
-
 sealed interface Effect {
     data object InvalidateGeneration : Effect
     data object HideCanvas : Effect
@@ -17,7 +15,6 @@ sealed interface Effect {
     data object NotifyPermissionLost : Effect
     data object ShowSecureTooltip : Effect
     data object ShowCaptureFailedTooltip : Effect
-    data class SetMode(val mode: TriggerMode) : Effect
     data object ShowPill : Effect
     data object HidePill : Effect
 }

@@ -13,7 +13,7 @@ plugins {
 val jvmScreenRenders = providers.gradleProperty("serifu.screenshots").orNull == "true"
 val screenshotSkipNative = providers.gradleProperty("serifu.skipNative").orNull == "true"
 
-/** Local signing values from `.env`. Missing file means the release build stays on the debug key. */
+/** Local signing values from `.env`. A missing keystore fails the release build unless explicitly opted out. */
 fun loadDotEnv(file: java.io.File): Map<String, String> {
     if (!file.exists()) return emptyMap()
     return file.readLines().mapNotNull { raw ->
@@ -68,6 +68,7 @@ android {
             signingConfig = if (releaseKeystore != null) {
                 signingConfigs.getByName("release")
             } else {
+                logger.warn("No release keystore (.env KEYSTORE_FILE): release packaging will fail without an explicit opt-out.")
                 signingConfigs.getByName("debug")
             }
             proguardFiles(
@@ -131,6 +132,30 @@ android {
                 test.filter.setIncludePatterns("app.walsoup.serifu.screenshots.*")
                 test.filter.isFailOnNoMatchingTests = true
             }
+        }
+    }
+}
+
+// Fail closed: a release must never silently ship signed with the debug key.
+// Checked on release packaging tasks only, so debug/test configuration stays usable
+// without a keystore. Explicit opt-out for local unsigned test builds.
+run {
+    val dotEnvRelease = loadDotEnv(rootProject.file(".env"))
+    val hasKeystore = dotEnvRelease["KEYSTORE_FILE"]?.let { rootProject.file(it) }?.isFile == true
+    if (!hasKeystore) {
+        val optedOut = providers.gradleProperty("serifu.allowDebugSignedRelease").orNull == "true" ||
+            System.getenv("SERIFU_ALLOW_DEBUG_SIGNED_RELEASE") == "true"
+        if (!optedOut) {
+            tasks.matching { it.name in setOf("packageRelease", "assembleRelease", "bundleRelease") }
+                .configureEach {
+                    doFirst {
+                        throw GradleException(
+                            "Release keystore missing (.env KEYSTORE_FILE). Refusing to ship a " +
+                                "debug-signed release. Set serifu.allowDebugSignedRelease=true for " +
+                                "a local unsigned test build only.",
+                        )
+                    }
+                }
         }
     }
 }

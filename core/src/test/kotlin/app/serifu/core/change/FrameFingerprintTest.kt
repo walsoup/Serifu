@@ -41,4 +41,14 @@ class FrameFingerprintTest {
         val b = FrameFingerprint.of(changed, 1440, 3200, 80, 100)
         assertTrue(!a.isSamePage(b), "distance=${a.distance(b)}")
     }
+
+    @Test
+    fun equalityComparesCellsByContent() {
+        val a = FrameFingerprint.of(tiny { _, _ -> 200 }, 1440, 3200, 80, 100)
+        val b = FrameFingerprint.of(tiny { _, _ -> 200 }, 1440, 3200, 80, 100)
+        assertEquals(a, b)
+        assertEquals(a.hashCode(), b.hashCode())
+        val c = FrameFingerprint.of(tiny { _, _ -> 40 }, 1440, 3200, 80, 100)
+        assertTrue(a != c)
+    }
 }

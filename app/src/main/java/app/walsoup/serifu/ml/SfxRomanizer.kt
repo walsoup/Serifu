@@ -6,6 +6,8 @@ import java.util.Locale
 
 /** Sound effects are romanized instead of translated. */
 object SfxRomanizer {
+    private val transliterators = HashMap<SourceLanguage, Transliterator?>()
+
     fun romanize(text: String, source: SourceLanguage): String {
         val id = when (source) {
             SourceLanguage.JA -> "Katakana-Latin; Hiragana-Latin"
@@ -15,10 +17,22 @@ object SfxRomanizer {
         }
         if (id == null) return text.uppercase(Locale.ENGLISH)
         val latin = try {
-            Transliterator.getInstance(id).transliterate(text)
+            transliterator(source, id)?.transliterate(text) ?: text
         } catch (_: IllegalArgumentException) {
             text
         }
         return latin.uppercase(Locale.ENGLISH)
+    }
+
+    @Synchronized
+    private fun transliterator(source: SourceLanguage, id: String): Transliterator? {
+        if (transliterators.containsKey(source)) return transliterators[source]
+        val created = try {
+            Transliterator.getInstance(id)
+        } catch (_: IllegalArgumentException) {
+            null
+        }
+        transliterators[source] = created
+        return created
     }
 }

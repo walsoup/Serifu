@@ -1,5 +1,6 @@
 package app.serifu.core.coordinator
 
+import app.serifu.core.Tuning
 import app.serifu.core.model.TriggerMode
 
 enum class ErrorKind {
@@ -34,8 +35,8 @@ data class ReducerConfig(
     val readerForeground: Boolean = true,
     val screenOn: Boolean = true,
     val hudVisible: Boolean = false,
-    val settleDelayMs: Long = 450,
-    val minIntervalMs: Long = 350,
+    val settleDelayMs: Long = Tuning.SETTLE_DELAY_DEFAULT_MS.toLong(),
+    val minIntervalMs: Long = Tuning.MIN_SCREENSHOT_INTERVAL_API_33_MS,
     val lastScreenshotUptimeMs: Long = 0,
 ) {
     fun canAuto(ignoreHud: Boolean = false): Boolean =

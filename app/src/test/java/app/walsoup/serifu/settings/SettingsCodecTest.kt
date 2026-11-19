@@ -126,6 +126,18 @@ class SettingsCodecTest {
     }
 
     @Test
+    fun apiKeyCodecHooksRoundTrip() {
+        val original = Settings(aiApiKey = "sk-live-key")
+        val prefs = mutablePreferencesOf()
+        original.writeTo(prefs, encryptApiKey = { "enc($it)" })
+        assertEquals("enc(sk-live-key)", prefs[SettingsKeys.aiApiKey])
+        val decoded = prefs.toSettings(defaultReaders = emptySet()) { stored ->
+            stored?.removePrefix("enc(")?.removeSuffix(")") ?: ""
+        }
+        assertEquals("sk-live-key", decoded.aiApiKey)
+    }
+
+    @Test
     fun legacyDiskCachePreferenceIsDropped() {
         val prefs = mutablePreferencesOf()
         prefs[booleanPreferencesKey("llmDiskCache")] = false

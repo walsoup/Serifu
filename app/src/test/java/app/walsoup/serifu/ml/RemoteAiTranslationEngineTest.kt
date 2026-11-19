@@ -94,30 +94,22 @@ class RemoteAiTranslationEngineTest {
     }
 
     @Test
-    fun geminiKeyIsEncodedAndAppendedBesideExistingQueryParameters() {
+    fun geminiKeyNeverAppearsInTheUrl() {
         val base = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
         assertTrue(isGeminiEndpoint(base))
-        assertEquals(
-            "$base?key=abc",
-            buildRemoteRequestUrl(base, "abc"),
-        )
-        assertEquals(
-            "$base?alt=json&key=a%26b%2Bc",
-            buildRemoteRequestUrl("$base?alt=json", "a&b+c"),
-        )
-        assertEquals(
-            "$base?key=already#section",
-            buildRemoteRequestUrl("$base?key=already#section", "other"),
-        )
-        assertEquals(
-            "$base?key=abc#frag",
-            buildRemoteRequestUrl("$base#frag", "abc"),
-        )
+        // Auth travels in the x-goog-api-key header; the URL is returned untouched
+        // so keys never land in server/proxy/CDN access logs.
+        assertEquals(base, buildRemoteRequestUrl(base, "abc"))
+        assertEquals("$base?alt=json", buildRemoteRequestUrl("$base?alt=json", "a&b+c"))
+        assertEquals("$base#frag", buildRemoteRequestUrl("$base#frag", "abc"))
         assertEquals(base, buildRemoteRequestUrl(base, "  "))
-        assertEquals(
-            "$base?monkey=1&key=abc",
-            buildRemoteRequestUrl("$base?monkey=1", "abc"),
-        )
+    }
+
+    @Test
+    fun errorBodiesPassThroughInDebugBuilds() {
+        // Release truncates to 200 chars; debug keeps the full body for diagnosis.
+        assertEquals("status detail", redactedErrorBody("status detail"))
+        assertEquals("", redactedErrorBody(""))
     }
 
     @Test

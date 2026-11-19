@@ -53,7 +53,8 @@ class TranslationCanvasView(context: Context) : View(context) {
 
     fun updateTimings(timings: app.walsoup.serifu.debug.PipelineTimings) {
         this.timings = timings
-        if (debug && visibility == VISIBLE) invalidate()
+        // Called from Default/IO workers; postInvalidate is thread-safe, invalidate is not.
+        if (debug && visibility == VISIBLE) postInvalidate()
     }
 
     fun showPage(page: RenderPage, debug: Boolean) {

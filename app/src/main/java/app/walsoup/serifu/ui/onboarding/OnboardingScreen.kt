@@ -673,13 +673,14 @@ private fun ColumnScope.TryItStep(
     val c = Serifu.colors
     var query by rememberSaveable { mutableStateOf("") }
 
-    // First visit with nothing chosen: switch on the known readers that are installed.
+    // First visit with nothing chosen: switch on the installed manga readers.
+    // Browsers are listed below but never auto-enabled (explicit opt-in).
     var seeded by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(apps) {
         if (!seeded && apps.isNotEmpty()) {
             seeded = true
             if (settings.readerPackages.isEmpty()) {
-                val known = apps.map { it.packageName }.filter { it in KnownReaders.packages }.toSet()
+                val known = apps.map { it.packageName }.filter { it in KnownReaders.autoSeed }.toSet()
                 if (known.isNotEmpty()) viewModel.update { it.copy(readerPackages = known) }
             }
         }

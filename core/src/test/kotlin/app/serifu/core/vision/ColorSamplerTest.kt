@@ -54,6 +54,14 @@ class ColorSamplerTest {
     }
 
     @Test
+    fun fillOutsideTheFrameFallsBackToPaper() {
+        val rgb = solidRgb(240, 240, 0xFF969696.toInt())
+        // Spans entirely past the right edge: no sample, no throw.
+        val mask = RowSpans(100, 0, 60, 60, IntArray(60) { 100 }, IntArray(60) { 120 }, scale = 4)
+        assertEquals(app.serifu.core.Tuning.PAPER_ARGB, ColorSampler.sampleFill(mask, rgb))
+    }
+
+    @Test
     fun classifierSeparatesDialogueCaptionSfxAndFreeText() {
         // Ellipse-like mask: spans narrow toward the top/bottom so the fill
         // ratio stays below the caption threshold.

@@ -3,6 +3,7 @@ package app.serifu.core.translate
 import app.serifu.core.model.ModelVariant
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -83,6 +84,13 @@ class BergamotCatalogTest {
         assertTrue(BergamotCatalog.compareVersion("1.0.0", "1.0.0-beta1") > 0)
         assertTrue(BergamotCatalog.compareVersion("1.0.0-beta2", "1.0.0-beta1") > 0)
         assertTrue(BergamotCatalog.compareVersion("1.10", "1.9") > 0)
+        assertTrue(BergamotCatalog.compareVersion("1.0.0-beta.10", "1.0.0-beta.2") > 0)
+    }
+
+    @Test
+    fun malformedBodyThrowsIllegalArgument() {
+        assertFailsWith<IllegalArgumentException> { BergamotCatalog.parse("not json") }
+        assertFailsWith<IllegalArgumentException> { BergamotCatalog.parse("""{"data": "oops"}""") }
     }
 
     private companion object {

@@ -48,10 +48,14 @@ class SerifuAccessibilityService : AccessibilityService() {
     private var sessionJob = SupervisorJob()
     private var scope = CoroutineScope(sessionJob + Dispatchers.Main.immediate)
     private var ocr = OcrEngine()
+    internal val ocrEngine: OcrEngine get() = ocr
     private lateinit var translator: OnDeviceTranslationEngine
     private lateinit var capturer: ScreenCapturer
     private var loop: TranslationCoordinator? = null
     private var screenReceiver: ScreenStateReceiver? = null
+    private var imeReceiver: android.content.BroadcastReceiver? = null
+    @Volatile private var cachedImePackage: String? = null
+    @Volatile private var imeResolved = false
     private var started = false
     val coordinator: TranslationCoordinator? get() = loop
 
@@ -60,6 +64,8 @@ class SerifuAccessibilityService : AccessibilityService() {
         overlays = OverlayManager(this)
         capturer = ScreenCapturer(this, overlays, FrameConverter())
     }
+
+    internal fun connectForTest() = onServiceConnected()
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -71,7 +77,7 @@ class SerifuAccessibilityService : AccessibilityService() {
         if (!sessionJob.isActive) {
             sessionJob = SupervisorJob()
             scope = CoroutineScope(sessionJob + Dispatchers.Main.immediate)
-            ocr = OcrEngine()
+            ocr.reset()
             capturer = ScreenCapturer(this, overlays, FrameConverter())
         }
         val bergamotModels = app.bergamotModels
@@ -122,10 +128,10 @@ class SerifuAccessibilityService : AccessibilityService() {
                 if (current.obscured) app.readerPresence.value = current.copy(obscured = false)
             },
             openApp = {
-                startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                openAppSafely(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             },
             openAppRoute = { route ->
-                startActivity(
+                openAppSafely(
                     Intent(this, MainActivity::class.java)
                         .putExtra(MainActivity.EXTRA_NAV_ROUTE, route)
                         .addFlags(
@@ -184,16 +190,50 @@ class SerifuAccessibilityService : AccessibilityService() {
             registerReceiver(receiver, filter)
         }
         screenReceiver = receiver
+        val ime = object : android.content.BroadcastReceiver() {
+            override fun onReceive(context: android.content.Context?, intent: Intent?) {
+                refreshImePackage()
+            }
+        }
+        val imeFilter = IntentFilter(Intent.ACTION_INPUT_METHOD_CHANGED)
+        if (Build.VERSION.SDK_INT >= 33) {
+            registerReceiver(ime, imeFilter, RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(ime, imeFilter)
+        }
+        imeReceiver = ime
         started = true
     }
+
+    private fun refreshImePackage() {
+        cachedImePackage = try {
+            Settings.Secure.getString(contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)
+                ?.substringBefore('/')
+        } catch (_: Throwable) {
+            null
+        }
+        imeResolved = true
+    }
+
+    /**
+     * The default-IME package, resolved once and refreshed on
+     * ACTION_INPUT_METHOD_CHANGED. Never queried for our own overlay events,
+     * which the router ignores before the IME comparison.
+     */
+    private fun imePackageFor(eventPackage: String?): String? {
+        if (eventPackage == null || eventPackage == packageName) return cachedImePackage
+        if (!imeResolved) refreshImePackage()
+        return cachedImePackage
+    }
+
+    internal fun imePackageForTest(pkg: String?): String? = imePackageFor(pkg)
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         val incoming = event ?: return
         val app = application as? SerifuApp ?: return
         val reading = loop ?: return
         val readers = app.settingsRepository.settings.value?.readerPackages.orEmpty()
-        val ime = Settings.Secure.getString(contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)
-            ?.substringBefore('/')
+        val ime = imePackageFor(incoming.packageName?.toString())
         val before = app.readerPresence.value
         val after = router.reduce(
             state = before,
@@ -254,6 +294,18 @@ class SerifuAccessibilityService : AccessibilityService() {
 
     override fun onInterrupt() = Unit
 
+    /**
+     * Overlay taps launch from the background, which some OEMs block. Never crash
+     * the service on a refused launch; the notification path stays as fallback.
+     */
+    private fun openAppSafely(intent: Intent) {
+        try {
+            startActivity(intent)
+        } catch (t: Throwable) {
+            android.util.Log.w("SerifuService", "Background activity launch refused", t)
+        }
+    }
+
     private fun notifyPermissionLost() {
         if (Build.VERSION.SDK_INT >= 33 &&
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
@@ -288,10 +340,13 @@ class SerifuAccessibilityService : AccessibilityService() {
         }
         @Suppress("DEPRECATION")
         if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL) {
-            ocr.close()
-            ocr = OcrEngine()
+            // Keep the instance: PagePipeline and TranslationCoordinator hold it.
+            ocr.reset()
             if (::translator.isInitialized) {
                 translator.trimMemory()
+            }
+            if (::capturer.isInitialized) {
+                capturer.trimMemory()
             }
         }
     }
@@ -326,6 +381,15 @@ class SerifuAccessibilityService : AccessibilityService() {
             }
         }
         screenReceiver = null
+        imeReceiver?.let {
+            try {
+                unregisterReceiver(it)
+            } catch (_: IllegalArgumentException) {
+                // Already unregistered.
+            }
+        }
+        imeReceiver = null
+        imeResolved = false
         if (::overlays.isInitialized) {
             overlays.detach()
         }

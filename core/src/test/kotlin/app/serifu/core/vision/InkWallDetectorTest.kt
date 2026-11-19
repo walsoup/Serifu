@@ -17,6 +17,14 @@ class InkWallDetectorTest {
         }
     }
 
+    private fun hLine(image: LumaImage, y: Int, left: Int, right: Int, value: Int = 0) {
+        for (x in left until right) {
+            if (x in 0 until image.width && y in 0 until image.height) {
+                image.bytes[y * image.width + x] = value.toByte()
+            }
+        }
+    }
+
     private val refUnit = 1f
 
     @Test
@@ -94,5 +102,51 @@ class InkWallDetectorTest {
         val a = IntRect(10, 10, 60, 50)
         val b = IntRect(40, 10, 90, 50)
         assertFalse(InkWallDetector.hasWall(a, b, Orientation.VERTICAL, image, refUnit))
+    }
+
+    @Test
+    fun stackedBubblesAreAHorizontalWall() {
+        val image = white(120, 120)
+        hLine(image, 52, 5, 115)
+        hLine(image, 53, 5, 115)
+        hLine(image, 57, 5, 115)
+        hLine(image, 58, 5, 115)
+        val a = IntRect(10, 10, 90, 40)
+        val b = IntRect(10, 70, 90, 100)
+        assertTrue(InkWallDetector.hasWall(a, b, Orientation.HORIZONTAL, image, refUnit))
+    }
+
+    @Test
+    fun stackedTextWithoutABorderIsNoHorizontalWall() {
+        val image = white(120, 120)
+        val a = IntRect(10, 10, 90, 40)
+        val b = IntRect(10, 70, 90, 100)
+        assertFalse(InkWallDetector.hasWall(a, b, Orientation.HORIZONTAL, image, refUnit))
+    }
+
+    @Test
+    fun unknownOrientationFollowsTheSeparatingAxis() {
+        val vertical = white(120, 60)
+        vLine(vertical, 47, 5, 55)
+        vLine(vertical, 48, 5, 55)
+        vLine(vertical, 52, 5, 55)
+        vLine(vertical, 53, 5, 55)
+        val a = IntRect(10, 10, 40, 50)
+        val b = IntRect(60, 10, 90, 50)
+        assertTrue(InkWallDetector.hasWall(a, b, Orientation.UNKNOWN, vertical, refUnit))
+
+        val horizontal = white(120, 120)
+        hLine(horizontal, 52, 5, 115)
+        hLine(horizontal, 53, 5, 115)
+        hLine(horizontal, 57, 5, 115)
+        hLine(horizontal, 58, 5, 115)
+        val c = IntRect(10, 10, 90, 40)
+        val d = IntRect(10, 70, 90, 100)
+        assertTrue(InkWallDetector.hasWall(c, d, Orientation.UNKNOWN, horizontal, refUnit))
+
+        // Diagonal separation is neither axis: no wall.
+        val e = IntRect(10, 10, 40, 40)
+        val f = IntRect(60, 60, 90, 90)
+        assertFalse(InkWallDetector.hasWall(e, f, Orientation.UNKNOWN, horizontal, refUnit))
     }
 }

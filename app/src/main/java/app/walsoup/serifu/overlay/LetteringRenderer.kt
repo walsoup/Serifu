@@ -18,6 +18,8 @@ import app.serifu.core.Tuning
 import app.serifu.core.geometry.IntRect
 import app.serifu.core.layout.BalloonBreak
 import app.serifu.core.layout.BubbleClean
+import app.serifu.core.layout.MeasuredLine
+import app.serifu.core.layout.TextFitSearch
 import app.serifu.core.model.BubbleKind
 import app.serifu.core.model.SfxMode
 import app.serifu.core.vision.OcrLine
@@ -92,24 +94,26 @@ class LetteringRenderer(context: Context) {
         }
         val clean = contours?.let { pathOf(it) }
         val organic = clean != null && !clean.isEmpty
+        val cjk = isCjkTarget(settings.targetLanguage)
         fun laidOut(size: Float, width: Float): StaticLayout {
             paint.textSize = size
             paint.letterSpacing = tracking(display, caps)
-            val broken = BalloonBreak.lines(display, width) { paint.measureText(it) }
+            val broken = BalloonBreak.lines(display, width, { paint.measureText(it) }, cjk)
             val joined = if (broken.isEmpty()) display else broken.joinToString("\n")
             return layout(style(joined, classicCaps = false), paint, width, leading(broken.size))
         }
-        // The text never leaves the lettering box. Start at the largest allowed size
-        // and step down until the wrapped text fits inside it; no growing past it.
+        // The text never leaves the lettering box. Binary-search the largest size
+        // whose wrapped text fits inside it (~7 layouts, not ~28); no growing past it.
         val box = safe
         val boxWidth = box.width().coerceAtLeast(1f)
         val floor = sp(Tuning.ABSOLUTE_MIN_FONT_SP)
-        var size = sp(settings.maxFontSp)
-        var fitted = laidOut(size, boxWidth)
-        while (!fitsIn(fitted, box) && size > floor) {
-            size = (size - 0.5f).coerceAtLeast(floor)
-            fitted = laidOut(size, boxWidth)
+        val ceiling = sp(settings.maxFontSp)
+        val fit = TextFitSearch.fit(boxWidth, box.height().coerceAtLeast(1f), floor, ceiling, floor) { size, width ->
+            val trial = laidOut(size, width)
+            // Character breaks are correct wrapping for CJK, not overflow.
+            MeasuredLine(trial.height.toFloat(), !cjk && midWordBreak(trial))
         }
+        val fitted = laidOut(fit.sizePx, boxWidth)
         val patch = RectF(cluster.patchRect.toRectF())
         patch.union(cluster.unionRect.toRectF())
         if (!organic) patch.union(box)
@@ -158,14 +162,13 @@ class LetteringRenderer(context: Context) {
         val maxW = (area.width() - padX * 2f).coerceAtLeast(1f)
         val maxH = (area.height() - padY * 2f).coerceAtLeast(1f)
         val floor = sp(minOf(minSp, Tuning.ABSOLUTE_MIN_FONT_SP))
-        var size = sp(maxSp)
-        paint.textSize = size
-        var fitted = layout(text, paint, maxW)
-        while (!(fitted.height <= maxH && !midWordBreak(fitted)) && size > floor) {
-            size = (size - 0.5f).coerceAtLeast(floor)
+        val fit = TextFitSearch.fit(maxW, maxH, floor, sp(maxSp), floor) { size, width ->
             paint.textSize = size
-            fitted = layout(text, paint, maxW)
+            val trial = layout(text, paint, width)
+            MeasuredLine(trial.height.toFloat(), midWordBreak(trial))
         }
+        paint.textSize = fit.sizePx
+        val fitted = layout(text, paint, maxW)
         var lineMax = 0f
         for (line in 0 until fitted.lineCount) lineMax = maxOf(lineMax, fitted.getLineWidth(line))
         val tagW = (lineMax + padX * 2f).coerceAtMost(area.width())
@@ -235,14 +238,13 @@ class LetteringRenderer(context: Context) {
         val maxW = (area.width() - padX * 2f).coerceAtLeast(1f)
         val maxH = (area.height() - padY * 2f).coerceAtLeast(1f)
         val floor = sp(minOf(minSp, Tuning.ABSOLUTE_MIN_FONT_SP))
-        var size = sp(maxSp)
-        paint.textSize = size
-        var fitted = layout(text, paint, maxW)
-        while (!(fitted.height <= maxH && !midWordBreak(fitted)) && size > floor) {
-            size = (size - 0.5f).coerceAtLeast(floor)
+        val fit = TextFitSearch.fit(maxW, maxH, floor, sp(maxSp), floor) { size, width ->
             paint.textSize = size
-            fitted = layout(text, paint, maxW)
+            val trial = layout(text, paint, width)
+            MeasuredLine(trial.height.toFloat(), midWordBreak(trial))
         }
+        paint.textSize = fit.sizePx
+        val fitted = layout(text, paint, maxW)
         // Hug the text: the tag is only as wide as its longest line, so it does not
         // paint over more art than the words need.
         var lineMax = 0f
@@ -429,9 +431,10 @@ class LetteringRenderer(context: Context) {
         return false
     }
 
-    /** Wrapped text is within [box] vertically and no word is broken mid-way. */
-    private fun fitsIn(laid: StaticLayout, box: RectF): Boolean =
-        laid.height <= box.height() + 0.5f && !midWordBreak(laid)
+    private fun isCjkTarget(tag: String): Boolean {
+        val base = tag.substringBefore('-').lowercase(Locale.ENGLISH)
+        return base == "ja" || base == "zh"
+    }
 
     private fun overlapArea(a: RectF, b: RectF): Float {
         val width = minOf(a.right, b.right) - maxOf(a.left, b.left)

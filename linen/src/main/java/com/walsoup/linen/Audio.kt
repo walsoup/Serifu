@@ -38,7 +38,7 @@ import kotlin.math.abs
 
 /** `mm:ss`, always monospace in the UI. */
 fun formatClock(ms: Long): String {
-    val totalSec = ms / 1000
+    val totalSec = (ms / 1000).coerceAtLeast(0)
     return "${(totalSec / 60).twoDigits()}:${(totalSec % 60).twoDigits()}"
 }
 

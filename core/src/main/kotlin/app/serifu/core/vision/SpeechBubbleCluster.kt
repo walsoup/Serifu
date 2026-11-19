@@ -8,7 +8,6 @@ data class SpeechBubbleCluster(
     val id: Int,
     val kind: BubbleKind,
     val sourceText: String,
-    val cacheKey: String,
     val orientation: Orientation,
     val unionRect: IntRect,
     val patchRect: IntRect,

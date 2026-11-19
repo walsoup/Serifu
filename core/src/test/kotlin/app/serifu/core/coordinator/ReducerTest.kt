@@ -143,7 +143,6 @@ class ReducerTest {
             ),
             off.effects,
         )
-        assertFalse(off.effects.any { it is Effect.SetMode })
     }
 
     @Test
@@ -166,7 +165,6 @@ class ReducerTest {
         )
         assertEquals(Phase.Showing(11), ready.state.phase)
         assertEquals(listOf(Effect.ShowPage(11)), ready.effects)
-        assertFalse(ready.effects.any { it is Effect.SetMode })
     }
 
     @Test
@@ -181,7 +179,6 @@ class ReducerTest {
         )
         assertEquals(Phase.Error(ErrorKind.SECURE_WINDOW), secure.state.phase)
         assertTrue(secure.effects.contains(Effect.ShowSecureTooltip))
-        assertFalse(secure.effects.any { it is Effect.SetMode })
     }
 
     @Test
@@ -196,7 +193,6 @@ class ReducerTest {
         )
         assertEquals(Phase.Error(ErrorKind.PERMISSION_LOST), lost.state.phase)
         assertTrue(lost.effects.contains(Effect.NotifyPermissionLost))
-        assertFalse(lost.effects.any { it is Effect.SetMode })
     }
 
     @Test
@@ -210,6 +206,22 @@ class ReducerTest {
         val stale = Reducer.reduce(capturing, Event.CaptureSucceeded(4, frameId = 8), now = 0, auto())
         assertEquals(capturing, stale.state)
         assertEquals(listOf(Effect.RecycleFrame(8)), stale.effects)
+    }
+
+    @Test
+    fun duplicateSuccessForTheFrameInFlightIsNotRecycled() {
+        val processing = CoordinatorState(phase = Phase.Processing(9), generation = 5)
+        val dup = Reducer.reduce(processing, Event.CaptureSucceeded(5, frameId = 9), now = 0, auto())
+        assertEquals(processing, dup.state)
+        assertEquals(emptyList(), dup.effects)
+    }
+
+    @Test
+    fun earlySettleElapsedIsIgnored() {
+        val settling = CoordinatorState(phase = Phase.Settling(500), generation = 7)
+        val early = Reducer.reduce(settling, Event.SettleElapsed, now = 499, auto())
+        assertEquals(settling, early.state)
+        assertEquals(emptyList(), early.effects)
     }
 
     @Test
@@ -263,13 +275,32 @@ class ReducerTest {
 
     @Test
     fun permissionLossAndSecureWindowAreFatal() {
-        val idle = CoordinatorState(phase = Phase.Idle, generation = 1)
-        val lost = Reducer.reduce(idle, Event.CaptureFailed(9, CaptureFailure.NO_ACCESS), now = 0, auto())
+        val capturing = CoordinatorState(phase = Phase.Capturing, generation = 1)
+        val lost = Reducer.reduce(capturing, Event.CaptureFailed(1, CaptureFailure.NO_ACCESS), now = 0, auto())
         assertEquals(Phase.Error(ErrorKind.PERMISSION_LOST), lost.state.phase)
         assertEquals(
             listOf(Effect.HideCanvas, Effect.CancelSettle, Effect.NotifyPermissionLost),
             lost.effects,
         )
+        // Stale terminal failures from a cancelled generation are ignored, not fatal.
+        val staleLost = Reducer.reduce(capturing, Event.CaptureFailed(9, CaptureFailure.NO_ACCESS), now = 0, auto())
+        assertEquals(capturing, staleLost.state)
+        assertEquals(emptyList(), staleLost.effects)
+        val staleCaptureSecure = Reducer.reduce(
+            capturing,
+            Event.CaptureFailed(9, CaptureFailure.SECURE),
+            now = 0,
+            auto(),
+        )
+        assertEquals(capturing, staleCaptureSecure.state)
+        assertEquals(emptyList(), staleCaptureSecure.effects)
+        val currentSecure = Reducer.reduce(
+            capturing,
+            Event.CaptureFailed(1, CaptureFailure.SECURE),
+            now = 0,
+            auto(),
+        )
+        assertEquals(Phase.Error(ErrorKind.SECURE_WINDOW), currentSecure.state.phase)
         val processing = CoordinatorState(phase = Phase.Processing(4), generation = 6)
         val secure = Reducer.reduce(processing, Event.FrameIsSecureBlack(6), now = 0, auto())
         assertEquals(Phase.Error(ErrorKind.SECURE_WINDOW), secure.state.phase)

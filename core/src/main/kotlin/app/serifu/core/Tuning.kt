@@ -22,6 +22,7 @@ object Tuning {
     const val FRAME_COMMIT_TIMEOUT_MS = 48L
     const val SELF_DETECT_LATIN_LINES = 2
     const val SELF_DETECT_PREFIX_CHARS = 12
+    const val SELF_DETECT_MIN_MATCH_CHARS = 4
 
     const val SECURE_BLACK_MEAN_MAX = 6f
     const val SECURE_BLACK_STDDEV_MAX = 3f
@@ -35,12 +36,14 @@ object Tuning {
     const val SCROLL_REUSE_WINDOW_MS = 10_000L
     const val SCROLL_COARSE_FRACTION = 0.6f
     const val SCROLL_FINE_RADIUS_ROWS = 8
-    const val SCROLL_FINE_SCALE = 4
+    const val LUMA_PYRAMID_QUARTER = 4
+    const val LUMA_PYRAMID_TINY = 16
+    // Coarse (1/16) rows per fine (1/4) row. Derived, not coincidentally 4.
+    const val SCROLL_FINE_SCALE = LUMA_PYRAMID_TINY / LUMA_PYRAMID_QUARTER
     const val SCROLL_ACCEPT_MAD = 3.0f
     const val SCROLL_MIN_OVERLAP_FRACTION = 0.5f
     const val SCROLL_DX_SEARCH_COLS = 4
     const val SHIFT_PREVIEW_ONSCREEN_FRACTION = 0.85f
-    const val SHIFT_MATCH_CENTER_REF_UNITS = 16f
 
     const val OCR_LONG_SIDE_MAX_PX = 2400
     const val LINE_MIN_SIZE_REF_UNITS = 10f
@@ -51,7 +54,6 @@ object Tuning {
     const val VERTICAL_RETILE_COUNT_MISMATCH = 0.4f
     const val VERTICAL_RETILE_GAP_FRACTION = 0.02f
     const val VERTICAL_RETILE_CELL_SPACING = 0.25f
-    const val VERTICAL_RETILE_ROW_GAP = 0.5f
     const val VERTICAL_RETILE_CONFIDENCE_GAIN = 0.1f
 
     const val SIZE_COMPAT_RATIO = 1.8f
@@ -96,8 +98,6 @@ object Tuning {
     /** Same-colour stroke, in frame pixels, that hides the quarter-scale stair. */
     const val CLEAN_FEATHER_PX = 2f
     const val PATCH_PAD_DP = 4f
-    const val LUMA_PYRAMID_QUARTER = 4
-    const val LUMA_PYRAMID_TINY = 16
 
     const val FILL_SAMPLE_COUNT = 64
     const val RING_SAMPLE_COUNT = 48
@@ -139,7 +139,13 @@ object Tuning {
      * Four seconds returns the source line, which then looks like a translation.
      */
     const val MLKIT_TRANSLATE_COLD_TIMEOUT_MS = 90_000L
+    /** Page-level cap across sequential cold-budget bubbles (first-run model load). */
+    const val MLKIT_PAGE_COLD_TIMEOUT_MS = 120_000L
     const val AI_REMOTE_TIMEOUT_MS = 30_000L
+    const val PROMPT_MAX_BUBBLES_PER_REQUEST = 20
+    const val PROMPT_MAX_SRC_CHARS = 400
+    const val LLM_RESPONSE_MAX_CHARS = 262_144
+    const val LLM_TRANSLATION_LENGTH_FACTOR = 4
 
     /** Bergamot decode config. Beam 1 + int8 keeps page latency low. */
     const val BERGAMOT_BEAM_SIZE = 1
@@ -149,6 +155,8 @@ object Tuning {
     const val BERGAMOT_MAX_LENGTH_FACTOR = 2.0
     const val BERGAMOT_GEMM_PRECISION = "int8shiftAlphaAll"
     const val BERGAMOT_CATALOG_CACHE_MS = 6 * 60 * 60 * 1000L
+    /** Small JSON: a stuck socket must not outlive cancellation by minutes. */
+    const val BERGAMOT_CATALOG_TIMEOUT_MS = 30_000L
     const val BERGAMOT_DOWNLOAD_TIMEOUT_MS = 120_000L
     const val BERGAMOT_TRANSLATE_TIMEOUT_MS = 30_000L
     const val BERGAMOT_LOAD_TIMEOUT_MS = 90_000L
@@ -186,7 +194,6 @@ object Tuning {
     const val OVERFLOW_GROW_STEP = 1.1f
     const val OVERFLOW_GROW_MAX_STEPS = 24
     const val GLYPH_AREA_FACTOR = 0.5f
-    const val TAG_ALPHA = 0.82f
     const val TAG_CORNER_DP = 6f
     const val TAG_PAD_VERTICAL_DP = 4f
     const val TAG_PAD_HORIZONTAL_DP = 8f
@@ -206,13 +213,8 @@ object Tuning {
     const val PILL_IDLE_DELAY_MS = 3_000L
     const val PILL_ALPHA_FADE_MS = 120
     const val PILL_SIZE_DP = 44
-    const val PILL_WIDTH_DP = 44
-    const val PILL_HEIGHT_DP = 44
     const val PILL_OFFSCREEN_DP = 10
     const val PILL_TOUCH_EXTEND_DP = 8
-    const val PILL_CORNER_DP = 22
-    const val PILL_SEAL_DP = 44
-    const val PILL_SEAL_CORNER_DP = 22
     const val PILL_RING_DP = 2.0f
     const val PILL_RING_INSET_DP = 3
     const val PILL_BREATHE_PERIOD_MS = 2_400

@@ -30,11 +30,15 @@ object ColorSampler {
             val y = (mask.y0 + row) * mask.scale + mask.scale / 2
             if (y !in 0 until rgb.height) continue
             val width = (hi - lo + 1).coerceAtLeast(1)
+            // Degenerate rows (fully outside the frame) yield no samples.
+            val clampedLo = lo.coerceAtLeast(0)
+            val clampedHi = hi.coerceAtMost(rgb.width - 1)
+            if (clampedLo > clampedHi) continue
             for (i in 0 until perRow) {
                 if (samples.size >= Tuning.FILL_SAMPLE_COUNT) break
                 val x = (lo + width * (i + 0.5f) / perRow).roundToInt()
-                    .coerceIn(0, rgb.width - 1)
-                samples.add(rgb.argb(x.coerceIn(lo.coerceAtLeast(0), hi.coerceAtMost(rgb.width - 1)), y))
+                    .coerceIn(clampedLo, clampedHi)
+                samples.add(rgb.argb(x, y))
             }
             if (samples.size >= Tuning.FILL_SAMPLE_COUNT) break
         }
@@ -61,6 +65,8 @@ object ColorSampler {
         }
         for (y in top until bottom) {
             if (y !in 0 until rgb.height) continue
+            // Corner rows were already sampled by the horizontal walk above.
+            if (y == top || y == bottom - 1) continue
             if (xIn(left, rgb.width) && y !in padded.top until padded.bottom) samples.add(rgb.argb(left, y))
             if (xIn(right - 1, rgb.width) && y !in padded.top until padded.bottom) {
                 samples.add(rgb.argb(right - 1, y))

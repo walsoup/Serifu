@@ -3,6 +3,7 @@ package app.serifu.core.image
 import app.serifu.core.geometry.IntRect
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -29,6 +30,15 @@ class LumaMathTest {
         assertTrue(LumaMath.isSecureBlack(black))
         val mixed = ByteArray(16) { index -> if (index < 8) 0 else 255.toByte() }
         assertFalse(LumaMath.isSecureBlack(LumaImage(4, 4, mixed)))
+    }
+
+    @Test
+    fun outOfBoundsReadsThrow() {
+        val luma = LumaImage(4, 4, ByteArray(16))
+        assertFailsWith<IllegalArgumentException> { luma[-1, 0] }
+        assertFailsWith<IllegalArgumentException> { luma[0, -1] }
+        assertFailsWith<IllegalArgumentException> { luma[4, 0] }
+        assertFailsWith<IllegalArgumentException> { luma[0, 4] }
     }
 }
 

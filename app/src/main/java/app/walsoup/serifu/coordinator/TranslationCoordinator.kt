@@ -84,6 +84,8 @@ class TranslationCoordinator(
     private var state: CoordinatorState = CoordinatorState()
     private var settleJob: Job? = null
     private var workJob: Job? = null
+    private val aiJobs = HashMap<Long, Job>()
+    private val timingsLock = Any()
     @Volatile
     private var settings = Settings()
     private var applied = Settings()
@@ -99,8 +101,16 @@ class TranslationCoordinator(
     private var shownTexts: List<String> = emptyList()
     private var selfDiscarded = 0
 
+    @Volatile
     var timings: PipelineTimings = PipelineTimings()
         private set
+
+    private fun updateTimings(transform: (PipelineTimings) -> PipelineTimings): PipelineTimings =
+        synchronized(timingsLock) {
+            val next = transform(timings)
+            timings = next
+            next
+        }
 
     val readerForeground: Boolean get() = presence().reader && screenOn
     val screenIsOn: Boolean get() = screenOn
@@ -161,8 +171,8 @@ class TranslationCoordinator(
         val started = System.nanoTime()
         overlays.canvas.hideImmediately()
         val elapsedUs = (System.nanoTime() - started) / 1_000
-        timings = timings.copy(hideUs = elapsedUs, hideSamples = timings.hideSamples + 1)
-        publishTimings(timings)
+        val snapshot = updateTimings { it.copy(hideUs = elapsedUs, hideSamples = it.hideSamples + 1) }
+        publishTimings(snapshot)
         Log.d(TAG, "hide=${elapsedUs / 1000.0}ms")
     }
 
@@ -281,6 +291,10 @@ class TranslationCoordinator(
             Effect.InvalidateGeneration -> {
                 settleJob?.cancel()
                 workJob?.cancel()
+                synchronized(aiJobs) {
+                    aiJobs.values.forEach { it.cancel() }
+                    aiJobs.clear()
+                }
             }
             Effect.HideCanvas -> overlays.canvas.hideImmediately()
             Effect.CancelSettle -> settleJob?.cancel()
@@ -328,12 +342,6 @@ class TranslationCoordinator(
                 val message = context.getString(R.string.tooltip_capture_failed)
                 overlays.showTooltip(message)
                 overlays.setHudStatus(message)
-            }
-            is Effect.SetMode -> {
-                if (settings.mode == effect.mode) return
-                replaceSettings(settings.copy(mode = effect.mode))
-                writeSettings { it.copy(mode = effect.mode) }
-                send(Event.ModeChanged)
             }
             Effect.ShowPill -> overlays.setPillVisible(true)
             Effect.HidePill -> overlays.setPillVisible(false)
@@ -404,23 +412,25 @@ class TranslationCoordinator(
                 )
                 if (exact != null) {
                     if (generation != state.generation) return
-                    timings = timings.copy(
-                        captureMs = frame.captureMs,
-                        convertMs = frame.convertMs,
-                        fingerprintMs = fingerprintMs,
-                        ocrMs = 0,
-                        clusterMs = 0,
-                        translateMlKitMs = 0,
-                        translateBergamotMs = 0,
-                        translateGemmaMs = 0,
-                        layoutMs = 0,
-                        totalMs = (clock() - started).coerceAtLeast(0),
-                        cacheResult = "exact",
-                        selfDiscarded = selfDiscarded,
-                    )
-                    publishTimings(timings)
-                    overlays.canvas.updateTimings(timings)
-                    Log.d(TAG, "cache=exact total=${timings.totalMs}ms")
+                    val snapshot = updateTimings {
+                        it.copy(
+                            captureMs = frame.captureMs,
+                            convertMs = frame.convertMs,
+                            fingerprintMs = fingerprintMs,
+                            ocrMs = 0,
+                            clusterMs = 0,
+                            translateMlKitMs = 0,
+                            translateBergamotMs = 0,
+                            translateGemmaMs = 0,
+                            layoutMs = 0,
+                            totalMs = (clock() - started).coerceAtLeast(0),
+                            cacheResult = "exact",
+                            selfDiscarded = selfDiscarded,
+                        )
+                    }
+                    publishTimings(snapshot)
+                    overlays.canvas.updateTimings(snapshot)
+                    Log.d(TAG, "cache=exact total=${snapshot.totalMs}ms")
                     snapshotPrev(frame)
                     send(Event.PageReady(generation, rememberPage(exact)))
                     return
@@ -442,22 +452,24 @@ class TranslationCoordinator(
                                 val preview = shiftPage(base, screenDyPx, frameW, frameH)
                                 if (preview != null) {
                                     cacheResult = "shift dy=${estimate.dyPx}"
-                                    timings = timings.copy(
-                                        captureMs = frame.captureMs,
-                                        convertMs = frame.convertMs,
-                                        fingerprintMs = fingerprintMs,
-                                        ocrMs = 0,
-                                        clusterMs = 0,
-                                        translateMlKitMs = 0,
-                                        translateBergamotMs = 0,
-                                        translateGemmaMs = 0,
-                                        layoutMs = 0,
-                                        totalMs = (clock() - started).coerceAtLeast(0),
-                                        cacheResult = cacheResult,
-                                        selfDiscarded = selfDiscarded,
-                                    )
-                                    publishTimings(timings)
-                                    overlays.canvas.updateTimings(timings)
+                                    val shiftSnapshot = updateTimings {
+                                        it.copy(
+                                            captureMs = frame.captureMs,
+                                            convertMs = frame.convertMs,
+                                            fingerprintMs = fingerprintMs,
+                                            ocrMs = 0,
+                                            clusterMs = 0,
+                                            translateMlKitMs = 0,
+                                            translateBergamotMs = 0,
+                                            translateGemmaMs = 0,
+                                            layoutMs = 0,
+                                            totalMs = (clock() - started).coerceAtLeast(0),
+                                            cacheResult = cacheResult,
+                                            selfDiscarded = selfDiscarded,
+                                        )
+                                    }
+                                    publishTimings(shiftSnapshot)
+                                    overlays.canvas.updateTimings(shiftSnapshot)
                                     send(Event.PageReady(generation, rememberPage(preview)))
                                 }
                             }
@@ -493,12 +505,15 @@ class TranslationCoordinator(
                 }
                 pipelineStageRes = R.string.phase_translating
                 refreshChrome()
+                // View reads are Main-only; snapshot before the Default-bound pipeline call.
+                val pillRect = withContext(Dispatchers.Main) { overlays.pillRectOnScreen() }
+                if (generation != state.generation) return
                 val lettered = try {
                     pipeline.letter(
                         lines = lines,
                         frame = frame,
                         settings = settings,
-                        pill = overlays.pillRectOnScreen(),
+                        pill = pillRect,
                         previousLines = previousLines,
                         now = clock,
                     )
@@ -534,27 +549,29 @@ class TranslationCoordinator(
                 Log.d(TAG, "letter completed: bubbles=${lettered.page?.bubbles?.size}, gen=$generation, stateGen=${state.generation}")
                 if (generation != state.generation) return
                 val page = lettered.page
-                timings = timings.copy(
-                    captureMs = frame.captureMs,
-                    convertMs = frame.convertMs,
-                    fingerprintMs = fingerprintMs,
-                    ocrMs = (ocrDone - ocrStarted).coerceAtLeast(0),
-                    clusterMs = lettered.clusterMs,
-                    translateMlKitMs = lettered.translateMs,
-                    translateBergamotMs = lettered.translateBergamotMs,
-                    translateGemmaMs = lettered.translateGemmaMs,
-                    layoutMs = lettered.layoutMs,
-                    totalMs = (finished - started).coerceAtLeast(0),
-                    cacheResult = cacheResult,
-                    selfDiscarded = selfDiscarded,
-                )
-                publishTimings(timings)
-                overlays.canvas.updateTimings(timings)
+                val letterSnapshot = updateTimings {
+                    it.copy(
+                        captureMs = frame.captureMs,
+                        convertMs = frame.convertMs,
+                        fingerprintMs = fingerprintMs,
+                        ocrMs = (ocrDone - ocrStarted).coerceAtLeast(0),
+                        clusterMs = lettered.clusterMs,
+                        translateMlKitMs = lettered.translateMs,
+                        translateBergamotMs = lettered.translateBergamotMs,
+                        translateGemmaMs = lettered.translateGemmaMs,
+                        layoutMs = lettered.layoutMs,
+                        totalMs = (finished - started).coerceAtLeast(0),
+                        cacheResult = cacheResult,
+                        selfDiscarded = selfDiscarded,
+                    )
+                }
+                publishTimings(letterSnapshot)
+                overlays.canvas.updateTimings(letterSnapshot)
                 Log.d(
                     TAG,
-                    "lines=${lines.size} bubbles=${page?.bubbles?.size ?: 0} ocr=${timings.ocrMs}ms " +
-                        "translateMlKit=${timings.translateMlKitMs}ms translateBergamot=${timings.translateBergamotMs}ms " +
-                        "translateAi=${timings.translateGemmaMs}ms total=${timings.totalMs}ms cache=$cacheResult engine=${lettered.engine}",
+                    "lines=${lines.size} bubbles=${page?.bubbles?.size ?: 0} ocr=${letterSnapshot.ocrMs}ms " +
+                        "translateMlKit=${letterSnapshot.translateMlKitMs}ms translateBergamot=${letterSnapshot.translateBergamotMs}ms " +
+                        "translateAi=${letterSnapshot.translateGemmaMs}ms total=${letterSnapshot.totalMs}ms cache=$cacheResult engine=${lettered.engine}",
                 )
                 if (page == null) {
                     send(Event.PageEmpty(generation))
@@ -620,7 +637,10 @@ class TranslationCoordinator(
     ) {
         val request = lettered.request ?: return
         val outcome = lettered.outcome ?: return
-        scope.launch(Dispatchers.IO) {
+        // Launch lazily so we can register the job under synchronized(aiJobs) BEFORE
+        // it starts executing. If InvalidateGeneration intervened between runProcess
+        // and here, state.generation changed and we discard the job without running it.
+        val job = scope.launch(Dispatchers.IO, start = kotlinx.coroutines.CoroutineStart.LAZY) {
             val aiStart = clock()
             try {
                 val upgraded = pipeline.translateWithAi(
@@ -637,9 +657,9 @@ class TranslationCoordinator(
                 if (generation == state.generation && upgraded != null) {
                     withContext(Dispatchers.Main) {
                         if (generation == state.generation) {
-                            timings = timings.copy(translateGemmaMs = aiMs)
-                            publishTimings(timings)
-                            overlays.canvas.updateTimings(timings)
+                            val aiSnapshot = updateTimings { it.copy(translateGemmaMs = aiMs) }
+                            publishTimings(aiSnapshot)
+                            overlays.canvas.updateTimings(aiSnapshot)
                             // Replace the base page so flipping back shows the AI translation.
                             val variant = if (lettered.engine == EngineId.BERGAMOT) settings.bergamotVariant.name else null
                             pageCache.put(
@@ -664,7 +684,25 @@ class TranslationCoordinator(
                 }
             } catch (t: Throwable) {
                 Log.w(TAG, "Progressive AI upgrade failed", t)
+            } finally {
+                synchronized(aiJobs) {
+                    if (aiJobs[generation]?.isCompleted == true) aiJobs.remove(generation)
+                }
             }
+        }
+        val shouldStart = synchronized(aiJobs) {
+            if (generation != state.generation) {
+                job.cancel()
+                false
+            } else {
+                aiJobs[generation]?.cancel()
+                aiJobs[generation] = job
+                true
+            }
+        }
+        if (shouldStart) {
+            job.invokeOnCompletion { synchronized(aiJobs) { aiJobs.remove(generation, job) } }
+            job.start()
         }
     }
 

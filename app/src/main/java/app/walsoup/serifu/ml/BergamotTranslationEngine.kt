@@ -40,8 +40,13 @@ open class BergamotTranslationEngine(
 ) : TranslationEngine {
     override val id: EngineId = EngineId.BERGAMOT
 
+    @Volatile
     private var slot: Slot? = null
     private val closed = AtomicBoolean(false)
+
+    /** Recreated when a native call outlives its timeout (see [poisonDispatcher]). */
+    @Volatile
+    private var activeDispatcher: ExecutorCoroutineDispatcher = dispatcher
 
     override suspend fun availability(source: SourceLanguage, target: String): EngineAvailability {
         if (!BergamotNative.available) {
@@ -70,7 +75,7 @@ open class BergamotTranslationEngine(
         if (!BergamotNative.available) return
         val route = models.resolveRoute(source.tag, target, variant(), allowFetch = false) ?: return
         if (!models.isRouteReady(route)) return
-        withContext(dispatcher) {
+        onNativeThread {
             evictIdleLocked(clock())
             withTimeout(Tuning.BERGAMOT_LOAD_TIMEOUT_MS) {
                 ensureSlot(route)
@@ -103,7 +108,7 @@ open class BergamotTranslationEngine(
             return PageTranslationResult(id, translated)
         }
 
-        val outputs = withContext(dispatcher) {
+        val outputs = onNativeThread {
             evictIdleLocked(clock())
             val active = withTimeout(Tuning.BERGAMOT_LOAD_TIMEOUT_MS) {
                 ensureSlot(route)
@@ -139,7 +144,7 @@ open class BergamotTranslationEngine(
 
     fun trimMemory() {
         try {
-            dispatcher.asExecutor().execute {
+            activeDispatcher.asExecutor().execute {
                 val current = slot
                 slot = null
                 try {
@@ -155,6 +160,7 @@ open class BergamotTranslationEngine(
 
     override fun close() {
         if (!closed.compareAndSet(false, true)) return
+        val disp = activeDispatcher
         val release = {
             val current = slot
             slot = null
@@ -166,19 +172,68 @@ open class BergamotTranslationEngine(
         }
         if (Thread.currentThread().name == THREAD_NAME) {
             release()
-            dispatcher.close()
+            disp.close()
         } else {
             try {
-                dispatcher.asExecutor().execute {
+                disp.asExecutor().execute {
                     try {
                         release()
                     } finally {
-                        dispatcher.close()
+                        disp.close()
                     }
                 }
             } catch (t: Throwable) {
                 Log.w(TAG, "Failed to dispatch release to Bergamot dispatcher", t)
-                dispatcher.close()
+                disp.close()
+            }
+        }
+    }
+
+    private suspend fun <T> onNativeThread(block: suspend () -> T): T {
+        val disp = activeDispatcher
+        try {
+            return withContext(disp) { block() }
+        } catch (timeout: kotlinx.coroutines.TimeoutCancellationException) {
+            poisonDispatcher(disp)
+            throw timeout
+        }
+    }
+
+    /**
+     * A JNI call cannot be cancelled: after a timeout the stuck call still owns
+     * the single native thread, and every later call would queue behind it and
+     * time out too. Abandon the thread for a fresh one; the abandoned handles
+     * are freed on the old thread once the stuck call returns, then it closes.
+     */
+    private fun poisonDispatcher(disp: ExecutorCoroutineDispatcher) {
+        val abandoned: Slot?
+        synchronized(this) {
+            if (disp !== activeDispatcher || closed.get()) return
+            Log.w(TAG, "Bergamot native call timed out; recycling the native thread")
+            abandoned = slot
+            slot = null
+            activeDispatcher = Executors
+                .newSingleThreadExecutor { runnable ->
+                    Thread(runnable, THREAD_NAME).apply { isDaemon = true }
+                }
+                .asCoroutineDispatcher()
+        }
+        try {
+            disp.asExecutor().execute {
+                try {
+                    abandoned?.free()
+                } catch (t: Throwable) {
+                    Log.w(TAG, "Failed to free abandoned native slot", t)
+                } finally {
+                    disp.close()
+                }
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "Failed to retire poisoned Bergamot dispatcher", t)
+            try {
+                disp.close()
+            } catch (_: Throwable) {
+                // Already closed.
             }
         }
     }

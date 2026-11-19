@@ -19,6 +19,13 @@ class SelfDetectionTest {
     }
 
     @Test
+    fun twoCharacterLinesNeverCountAsHits() {
+        val lines = listOf(line("OK"), line("GO"))
+        val shown = listOf("OK Computer says hi", "GO away now please")
+        assertFalse(SelfDetection.leaked(lines, shown))
+    }
+
+    @Test
     fun oneMatchOrJapaneseDoesNotLeak() {
         assertFalse(SelfDetection.leaked(listOf(line("Hello there friend")), listOf("Hello there friend")))
         assertFalse(

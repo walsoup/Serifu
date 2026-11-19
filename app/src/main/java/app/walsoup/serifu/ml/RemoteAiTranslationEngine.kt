@@ -27,7 +27,6 @@ import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
-import java.net.URLEncoder
 import java.security.MessageDigest
 
 class RemoteAiTranslationEngine(
@@ -96,14 +95,18 @@ class RemoteAiTranslationEngine(
                 return@withContext PageTranslationResult(id, translated)
             }
 
-            val prompt = PromptBuilder.build(request.copy(bubbles = pending))
-            val fallback = pending.associate { it.id to it.text }
-
-            val rawContent = withTimeout(Tuning.AI_REMOTE_TIMEOUT_MS) {
-                callApiWithFallback(settings, prompt)
+            // Bounded prompts: OCR garbage on a busy spread must not scale one
+            // request's token cost and latency without limit.
+            val budgets = pending.associate { it.id to it.charBudget }
+            val parsed = HashMap<Int, String>()
+            for (chunk in pending.chunked(Tuning.PROMPT_MAX_BUBBLES_PER_REQUEST)) {
+                val prompt = PromptBuilder.buildStructured(request.copy(bubbles = chunk))
+                val fallback = chunk.associate { it.id to it.text }
+                val rawContent = withTimeout(Tuning.AI_REMOTE_TIMEOUT_MS) {
+                    callApiWithFallback(settings, prompt.system, prompt.user)
+                }
+                parsed.putAll(LlmResponseParser.parse(rawContent, fallback, budgets))
             }
-
-            val parsed = LlmResponseParser.parse(rawContent, fallback)
             Log.i(TAG, "Translated ${pending.size} bubbles via AI")
             for (bubble in pending) {
                 val text = parsed[bubble.id] ?: bubble.text
@@ -116,7 +119,7 @@ class RemoteAiTranslationEngine(
             PageTranslationResult(id, translated)
         }
 
-    private fun callApiWithFallback(settings: Settings, prompt: String): String {
+    private fun callApiWithFallback(settings: Settings, system: String, user: String): String {
         val initialEffort = when (settings.reasoningEffort) {
             ReasoningEffort.AUTO -> null
             ReasoningEffort.NONE -> "none"
@@ -126,30 +129,30 @@ class RemoteAiTranslationEngine(
         }
 
         try {
-            return callApi(settings, prompt, initialEffort)
+            return callApi(settings, system, user, initialEffort)
         } catch (e: ApiException) {
             if (e.isReasoningEffortError) {
                 if (initialEffort == "none") {
                     Log.i(TAG, "Model rejected 'none' reasoning_effort; retrying with 'low'")
                     try {
-                        return callApi(settings, prompt, "low")
+                        return callApi(settings, system, user, "low")
                     } catch (e2: ApiException) {
                         if (e2.isReasoningEffortError) {
                             Log.i(TAG, "Model rejected reasoning_effort; retrying without reasoning_effort")
-                            return callApi(settings, prompt, null)
+                            return callApi(settings, system, user, null)
                         }
                         throw e2
                     }
                 } else if (initialEffort != null) {
                     Log.i(TAG, "Model rejected reasoning_effort '$initialEffort'; retrying without reasoning_effort")
-                    return callApi(settings, prompt, null)
+                    return callApi(settings, system, user, null)
                 }
             }
             throw e
         }
     }
 
-    private fun callApi(settings: Settings, prompt: String, effort: String? = null): String {
+    private fun callApi(settings: Settings, system: String, user: String, effort: String? = null): String {
         val apiKey = settings.aiApiKey.trim()
         val model = settings.aiModel.trim().ifEmpty { "gpt-4o-mini" }
         val rawEndpoint = settings.aiEndpoint.trim()
@@ -168,11 +171,16 @@ class RemoteAiTranslationEngine(
 
         val requestBody = if (isGemini) {
             buildJsonObject {
+                putJsonObject("systemInstruction") {
+                    putJsonArray("parts") {
+                        add(buildJsonObject { put("text", system) })
+                    }
+                }
                 putJsonArray("contents") {
                     add(
                         buildJsonObject {
                             putJsonArray("parts") {
-                                add(buildJsonObject { put("text", prompt) })
+                                add(buildJsonObject { put("text", user) })
                             }
                         },
                     )
@@ -201,8 +209,14 @@ class RemoteAiTranslationEngine(
                 putJsonArray("messages") {
                     add(
                         buildJsonObject {
+                            put("role", "system")
+                            put("content", system)
+                        },
+                    )
+                    add(
+                        buildJsonObject {
                             put("role", "user")
-                            put("content", prompt)
+                            put("content", user)
                         },
                     )
                 }
@@ -222,8 +236,13 @@ class RemoteAiTranslationEngine(
             readTimeout = Tuning.AI_REMOTE_TIMEOUT_MS.toInt()
             doOutput = true
             setRequestProperty("Content-Type", "application/json; charset=utf-8")
-            if (!isGemini && apiKey.isNotBlank()) {
-                setRequestProperty("Authorization", "Bearer $apiKey")
+            if (apiKey.isNotBlank()) {
+                if (isGemini) {
+                    // Header auth: a ?key= query parameter lands in server/proxy/CDN access logs.
+                    setRequestProperty("x-goog-api-key", apiKey)
+                } else {
+                    setRequestProperty("Authorization", "Bearer $apiKey")
+                }
             }
         }
 
@@ -237,7 +256,7 @@ class RemoteAiTranslationEngine(
             if (responseCode !in 200..299) {
                 val errorStream = connection.errorStream ?: connection.inputStream
                 val errorBody = errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
-                Log.w(TAG, "API call failed with status $responseCode: $errorBody")
+                Log.w(TAG, "API call failed with status $responseCode: ${redactedErrorBody(errorBody)}")
                 throw ApiException(responseCode, errorBody)
             }
 
@@ -287,7 +306,8 @@ internal fun isGeminiEndpoint(endpoint: String): Boolean =
 
 internal fun buildRemoteRequestUrl(endpoint: String, apiKey: String): String {
     val raw = endpoint.trim()
-    if (isGeminiEndpoint(raw)) return appendQueryParameter(raw, "key", apiKey.trim())
+    // Gemini authenticates via the x-goog-api-key header; the key must never be in the URL.
+    if (isGeminiEndpoint(raw)) return raw
     return when {
         raw.isEmpty() -> "https://api.openai.com/v1/chat/completions"
         raw.endsWith("/chat/completions") -> raw
@@ -296,25 +316,12 @@ internal fun buildRemoteRequestUrl(endpoint: String, apiKey: String): String {
     }
 }
 
-private fun appendQueryParameter(url: String, name: String, value: String): String {
-    if (value.isEmpty() || queryParameterNames(url).any { it == name }) return url
-    val hash = url.indexOf('#')
-    val beforeFragment = if (hash >= 0) url.substring(0, hash) else url
-    val fragment = if (hash >= 0) url.substring(hash) else ""
-    val base = beforeFragment.trimEnd('?', '&')
-    val separator = if ('?' in base) '&' else '?'
-    val encoded = URLEncoder.encode(value, Charsets.UTF_8.name())
-    return "$base$separator$name=$encoded$fragment"
-}
-
-private fun queryParameterNames(url: String): List<String> {
-    val query = url.substringAfter('?', missingDelimiterValue = "").substringBefore('#')
-    if (query.isEmpty()) return emptyList()
-    return query.split('&').map { it.substringBefore('=').trim() }.filter { it.isNotEmpty() }
-}
+/** Self-hosted gateways echo request fragments in error bodies: truncate in release. */
+internal fun redactedErrorBody(body: String): String =
+    if (app.walsoup.serifu.BuildConfig.DEBUG) body else body.take(200)
 
 private class ApiException(val statusCode: Int, val errorBody: String) :
-    RuntimeException("AI API error ($statusCode): $errorBody") {
+    RuntimeException("AI API error ($statusCode): ${redactedErrorBody(errorBody)}") {
     val isReasoningEffortError: Boolean
         get() = statusCode == 400 && (
             errorBody.contains("reasoning_effort", ignoreCase = true) ||

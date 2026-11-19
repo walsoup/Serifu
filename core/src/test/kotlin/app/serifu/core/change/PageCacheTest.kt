@@ -6,6 +6,7 @@ import app.serifu.core.translate.EngineId
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class PageCacheTest {
     private fun fingerprint(fill: Int): FrameFingerprint {
@@ -71,5 +72,33 @@ class PageCacheTest {
         cache.clear()
         assertEquals(0, cache.size())
         assertNull(cache.get(fpA, 0, SourceLanguage.JA, "en", EngineId.MLKIT))
+    }
+
+    @Test
+    fun concurrentPutGetClearNeverCorrupts() {
+        val cache = PageCache<String>()
+        val fps = List(8) { fingerprint(it * 30) }
+        val errors = java.util.concurrent.CopyOnWriteArrayList<Throwable>()
+        val threads = List(8) { worker ->
+            Thread {
+                try {
+                    repeat(500) { i ->
+                        val fp = fps[(worker + i) % fps.size]
+                        when (i % 5) {
+                            0 -> cache.clear()
+                            1, 2 -> cache.put(fp, 0, SourceLanguage.JA, "en", EngineId.MLKIT, "w$worker-$i")
+                            else -> cache.get(fp, 0, SourceLanguage.JA, "en", EngineId.MLKIT)
+                        }
+                        cache.size()
+                    }
+                } catch (t: Throwable) {
+                    errors.add(t)
+                }
+            }
+        }
+        threads.forEach { it.start() }
+        threads.forEach { it.join(30_000) }
+        assertTrue(errors.isEmpty(), "concurrent access failed: ${errors.firstOrNull()}")
+        assertTrue(cache.size() in 0..12)
     }
 }

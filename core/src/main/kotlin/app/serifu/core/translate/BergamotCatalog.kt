@@ -22,8 +22,16 @@ object BergamotCatalog {
     private val litePreference = listOf("tiny", "base", "base-memory")
     private val fullPreference = listOf("base-memory", "base", "tiny")
 
+    /**
+     * @throws IllegalArgumentException on malformed bodies. Callers fall back
+     *   to the cached catalog; a corrupt body must never overwrite the cache.
+     */
     fun parse(recordsJson: String): Catalog {
-        val envelope = json.decodeFromString(RecordsEnvelope.serializer(), recordsJson)
+        val envelope = try {
+            json.decodeFromString(RecordsEnvelope.serializer(), recordsJson)
+        } catch (e: Exception) {
+            throw IllegalArgumentException("Malformed Bergamot catalog body", e)
+        }
         return fromRecords(envelope.data)
     }
 
@@ -129,7 +137,9 @@ object BergamotCatalog {
         version: String,
         records: List<CatalogRecord>,
     ): ModelFiles? {
-        val byType = records.associateBy { it.fileType }
+        // Duplicate file types keep the first record deterministically.
+        val byType = LinkedHashMap<String, CatalogRecord>()
+        for (record in records) byType.putIfAbsent(record.fileType, record)
         val model = byType["model"] ?: return null
         val lex = byType["lex"] ?: return null
         val sharedVocab = byType["vocab"]
@@ -189,9 +199,50 @@ object BergamotCatalog {
         if (left.preRelease.isEmpty() != right.preRelease.isEmpty()) {
             return if (left.preRelease.isEmpty()) 1 else -1
         }
-        val pre = left.preRelease.compareTo(right.preRelease)
+        val pre = comparePreRelease(left.preRelease, right.preRelease)
         if (pre != 0) return pre
         return a.compareTo(b)
+    }
+
+    /** Numeric-aware so beta.10 sorts after beta.2. */
+    private fun comparePreRelease(a: String, b: String): Int {
+        val left = preReleaseTokens(a)
+        val right = preReleaseTokens(b)
+        for (i in 0 until maxOf(left.size, right.size)) {
+            val l = left.getOrNull(i) ?: return -1
+            val r = right.getOrNull(i) ?: return 1
+            val ln = l.toIntOrNull()
+            val rn = r.toIntOrNull()
+            val cmp = if (ln != null && rn != null) ln.compareTo(rn) else l.compareTo(r)
+            if (cmp != 0) return cmp
+        }
+        return 0
+    }
+
+    private fun preReleaseTokens(value: String): List<String> {
+        if (value.isEmpty()) return emptyList()
+        val tokens = ArrayList<String>()
+        val current = StringBuilder()
+        var digitRun: Boolean? = null
+        fun flush() {
+            if (current.isNotEmpty()) {
+                tokens.add(current.toString())
+                current.clear()
+            }
+        }
+        for (c in value) {
+            if (!c.isLetterOrDigit()) {
+                flush()
+                digitRun = null
+                continue
+            }
+            val digit = c.isDigit()
+            if (digitRun != null && digit != digitRun) flush()
+            digitRun = digit
+            current.append(c)
+        }
+        flush()
+        return tokens
     }
 
     private data class VersionParts(val numbers: List<Int>, val preRelease: String)

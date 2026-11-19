@@ -16,7 +16,7 @@ class HomeViewModel(private val repository: SettingsRepository) : ViewModel() {
         .stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5_000),
-            checkNotNull(repository.settings.value),
+            repository.settings.value ?: Settings(),
         )
 
     fun update(transform: (Settings) -> Settings) {

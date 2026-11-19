@@ -41,12 +41,23 @@ class ScreenCapturer(
         captureExecutor.shutdown()
     }
 
+    fun trimMemory() = converter.trimMemory()
+
     suspend fun capture(notBefore: Long, stillCurrent: () -> Boolean): CaptureOutcome {
         val wait = notBefore - clock()
         if (wait > 0) delay(wait)
         if (!stillCurrent()) return CaptureOutcome.Superseded
-        overlays.canvas.awaitOffScreen()
-        overlays.dismissHudImmediately()
+        // Overlay/view/WindowManager work is Main-only; capture() runs on Default/IO.
+        data class Preamble(
+            val rotation: Int,
+            val pillRect: app.serifu.core.geometry.IntRect?,
+            val systemBars: VerticalInsets,
+        )
+        val pre = withContext(Dispatchers.Main.immediate) {
+            overlays.canvas.awaitOffScreen()
+            overlays.dismissHudImmediately()
+            Preamble(overlays.rotation(), overlays.pillRectOnScreen(), overlays.systemBars())
+        }
         if (!stillCurrent()) return CaptureOutcome.Superseded
         val shotStarted = clock()
         lastScreenshotRequestUptimeMs = shotStarted
@@ -62,9 +73,9 @@ class ScreenCapturer(
                             hardwareBuffer = buffer,
                             colorSpace = screenshot.colorSpace,
                             timestampUptime = screenshot.timestamp,
-                            rotation = overlays.rotation(),
-                            pillRect = overlays.pillRectOnScreen(),
-                            systemBars = overlays.systemBars(),
+                            rotation = pre.rotation,
+                            pillRect = pre.pillRect,
+                            systemBars = pre.systemBars,
                         )
                     } catch (t: Throwable) {
                         android.util.Log.e("SerifuCapture", "converter.convert failed", t)

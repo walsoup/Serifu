@@ -5,7 +5,6 @@ import app.serifu.core.geometry.IntRect
 import app.serifu.core.image.LumaImage
 import app.serifu.core.image.RowSpans
 import kotlin.math.max
-import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
@@ -33,7 +32,10 @@ object BubbleRegionEstimator {
         val frame = IntRect(0, 0, quarter.width * scale, quarter.height * scale)
         val fallback = fallback(unionRect, padPx, frame)
         // Search bound B in frame pixels, then mapped to quarter pixels.
-        val expand = max(3f * charSizePx, 0.5f * max(unionRect.width, unionRect.height)).roundToInt()
+        val expand = max(
+            Tuning.REGION_EXPAND_CHAR_FACTOR * charSizePx,
+            Tuning.REGION_EXPAND_UNION_FACTOR * max(unionRect.width, unionRect.height),
+        ).roundToInt()
         val boundFrame = IntRect(
             unionRect.left - expand,
             unionRect.top - expand,
@@ -116,21 +118,18 @@ object BubbleRegionEstimator {
         val unionPaddedQ = IntRect(
             unionQ.left - padQ, unionQ.top - padQ, unionQ.right + padQ, unionQ.bottom + padQ,
         )
-        fun unionQ(a: IntRect, b: IntRect): IntRect {
-            if (a.isEmpty) return b
-            if (b.isEmpty) return a
-            return IntRect(min(a.left, b.left), min(a.top, b.top), max(a.right, b.right), max(a.bottom, b.bottom))
-        }
-        val letterQ2 = unionQ(letterQ, unionPaddedQ)
+        val letterQ2 = letterQ.union(unionPaddedQ)
         val lettering = IntRect(
             letterQ2.left * scale, letterQ2.top * scale,
             letterQ2.right * scale, letterQ2.bottom * scale,
         ).intersect(frame)
         val maskFrame = mask.boundingBoxFrame() ?: return fallback
-        val patch = unionQ(unionQ(lettering, IntRect(
-            unionRect.left - padPx, unionRect.top - padPx,
-            unionRect.right + padPx, unionRect.bottom + padPx,
-        )), maskFrame).intersect(frame)
+        val patch = lettering.union(
+            IntRect(
+                unionRect.left - padPx, unionRect.top - padPx,
+                unionRect.right + padPx, unionRect.bottom + padPx,
+            ),
+        ).union(maskFrame).intersect(frame)
         if (lettering.isEmpty || patch.isEmpty) return fallback
         return RegionResult(mask, lettering, patch, leaked = false)
     }

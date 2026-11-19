@@ -23,3 +23,6 @@ screens/
 # Temporary files
 .tmp*
 
+# Local review reports
+docs/reviews/
+

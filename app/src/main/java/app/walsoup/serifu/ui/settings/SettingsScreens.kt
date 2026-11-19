@@ -185,7 +185,7 @@ fun LanguagesScreen(
             text = stringResource(R.string.bergamot_delete_body),
             confirmLabel = stringResource(R.string.delete),
             onConfirm = {
-                app.bergamotModels.deletePair(model.from, model.to, model.architecture)
+                coroutineScope.launch { app.bergamotModels.deletePair(model.from, model.to, model.architecture) }
                 pendingBergamotDelete = null
             },
             onDismiss = { pendingBergamotDelete = null },
@@ -852,6 +852,7 @@ fun EngineScreen(
     val bergamotModels = app.bergamotModels
     val bergamotInstalled by bergamotModels.installed.collectAsStateWithLifecycle()
     val bergamotReadyKeys by bergamotModels.readyKeys.collectAsStateWithLifecycle()
+    val engineScope = rememberCoroutineScope()
     var pendingBergamotDelete by remember { mutableStateOf<BergamotInstalledModel?>(null) }
     var confirmDeleteActiveRoute by remember { mutableStateOf(false) }
 
@@ -884,7 +885,7 @@ fun EngineScreen(
             text = stringResource(R.string.bergamot_delete_body),
             confirmLabel = stringResource(R.string.delete),
             onConfirm = {
-                bergamotModels.deletePair(model.from, model.to, model.architecture)
+                engineScope.launch { bergamotModels.deletePair(model.from, model.to, model.architecture) }
                 pendingBergamotDelete = null
             },
             onDismiss = { pendingBergamotDelete = null },
@@ -897,15 +898,17 @@ fun EngineScreen(
             text = stringResource(R.string.bergamot_delete_body),
             confirmLabel = stringResource(R.string.delete),
             onConfirm = {
-                when (route) {
-                    is ModelRoute.Direct -> bergamotModels.deletePair(
-                        route.model.from,
-                        route.model.to,
-                        route.model.architecture,
-                    )
-                    is ModelRoute.Pivot -> {
-                        bergamotModels.deletePair(route.first.from, route.first.to, route.first.architecture)
-                        bergamotModels.deletePair(route.second.from, route.second.to, route.second.architecture)
+                engineScope.launch {
+                    when (route) {
+                        is ModelRoute.Direct -> bergamotModels.deletePair(
+                            route.model.from,
+                            route.model.to,
+                            route.model.architecture,
+                        )
+                        is ModelRoute.Pivot -> {
+                            bergamotModels.deletePair(route.first.from, route.first.to, route.first.architecture)
+                            bergamotModels.deletePair(route.second.from, route.second.to, route.second.architecture)
+                        }
                     }
                 }
                 confirmDeleteActiveRoute = false
@@ -1175,7 +1178,8 @@ fun EngineScreen(
             var modelFocus by remember { mutableStateOf(false) }
             var endpointFocus by remember { mutableStateOf(false) }
 
-            var localKey by rememberSaveable { mutableStateOf(settings.aiApiKey) }
+            // The key is re-seeded from DataStore; it must not persist in saved instance state.
+            var localKey by remember { mutableStateOf(settings.aiApiKey) }
             var localModel by rememberSaveable { mutableStateOf(settings.aiModel) }
             var localEndpoint by rememberSaveable { mutableStateOf(settings.aiEndpoint) }
             var showPassword by remember { mutableStateOf(false) }

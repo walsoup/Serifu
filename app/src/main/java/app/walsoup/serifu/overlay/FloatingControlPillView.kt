@@ -97,6 +97,8 @@ class FloatingControlPillView(context: Context) : View(context) {
 
     private var currentScale = 1.0f
     private var scaleAnimator: ValueAnimator? = null
+    private var moveToPosted = false
+    private var moveToAttempts = 0
 
     private fun animateScale(target: Float, durationMs: Long, overshoot: Boolean = false) {
         scaleAnimator?.cancel()
@@ -201,12 +203,25 @@ class FloatingControlPillView(context: Context) : View(context) {
         val layout = params ?: return
         val geo = host?.geometry() ?: return
         if (width == 0) {
-            post { moveTo(side, yFraction) }
+            // One deferred retry in flight, capped: an undisplayed view must not
+            // flood the queue with re-posts.
+            if (moveToAttempts >= MAX_MOVE_TO_ATTEMPTS || moveToPosted) return
+            moveToPosted = true
+            moveToAttempts++
+            post {
+                moveToPosted = false
+                if (isAttachedToWindow) moveTo(side, yFraction)
+            }
             return
         }
-        dockedEnd = side == PillSide.END
-        layout.x = dockedX(side, geo.width)
-        layout.y = yFor(yFraction, geo)
+        moveToAttempts = 0
+        val end = side == PillSide.END
+        val x = dockedX(side, geo.width)
+        val y = yFor(yFraction, geo)
+        if (dockedEnd == end && layout.x == x && layout.y == y) return
+        dockedEnd = end
+        layout.x = x
+        layout.y = y
         pushLayout()
         invalidate()
     }
@@ -508,4 +523,8 @@ class FloatingControlPillView(context: Context) : View(context) {
     fun confirmHaptic() = haptic(Haptic.CONFIRM)
 
     private enum class Haptic { EDGE, LONG_PRESS, CONFIRM }
+
+    private companion object {
+        const val MAX_MOVE_TO_ATTEMPTS = 30
+    }
 }

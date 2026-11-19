@@ -4,6 +4,7 @@ import app.serifu.core.geometry.IntRect
 import app.serifu.core.image.RowSpans
 import kotlin.math.sqrt
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -43,5 +44,24 @@ class BubbleCleanTest {
         val glyphs = IntRect(64, 52, 104, 76)
         val contour = BubbleClean.contours(mask, glyphs).single()
         assertTrue(contour.contains(glyphs.centerX.toFloat(), glyphs.centerY.toFloat()))
+    }
+
+    @Test
+    fun separatedBandsProduceOneContourEach() {
+        val height = 20
+        val minX = IntArray(height) { -1 }
+        val maxX = IntArray(height) { -1 }
+        for (row in 0 until 8) {
+            minX[row] = 10
+            maxX[row] = 20
+        }
+        for (row in 12 until 20) {
+            minX[row] = 10
+            maxX[row] = 20
+        }
+        val mask = RowSpans(0, 0, 40, height, minX, maxX, scale = 4)
+        val glyphs = IntRect(20, 0, 60, 20)
+        val contours = BubbleClean.contours(mask, glyphs)
+        assertEquals(2, contours.size)
     }
 }

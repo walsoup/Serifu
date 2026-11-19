@@ -46,6 +46,28 @@ class LineFilterTest {
     }
 
     @Test
+    fun cjkPunctuationLinesAreDropped() {
+        val lines = listOf(
+            line("。。。", IntRect(0, 0, 60, 40)),
+            line("！！！", IntRect(0, 0, 60, 40)),
+            line("、、、", IntRect(0, 0, 60, 40)),
+            line("おはよう", IntRect(0, 0, 40, 160)),
+        )
+        val kept = LineFilter.keep(lines, 1080, 1920, skipLatin = false, pill = null).map { it.line.text }
+        assertEquals(listOf("おはよう"), kept)
+    }
+
+    @Test
+    fun fullwidthLatinIsSkippedAsLatin() {
+        val lines = listOf(
+            line("ＡＢＣ１２３", IntRect(0, 0, 160, 40)),
+            line("おはよう", IntRect(0, 0, 40, 160)),
+        )
+        val skipped = LineFilter.keep(lines, 1080, 1920, skipLatin = true, pill = null).map { it.line.text }
+        assertEquals(listOf("おはよう"), skipped)
+    }
+
+    @Test
     fun verticalTextIsNotRotatedButOffAxisIs() {
         assertEquals(false, LineFilter.isOffAxis(0f))
         assertEquals(false, LineFilter.isOffAxis(90f))

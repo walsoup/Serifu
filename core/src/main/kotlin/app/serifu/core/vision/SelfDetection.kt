@@ -17,11 +17,22 @@ object SelfDetection {
             val text = line.text.trim()
             if (text.isEmpty() || !latinOnly.matches(text)) continue
             val prefix = prefixOf(text)
-            if (prefix.isNotEmpty() && shown.any { it == prefix || it.startsWith(prefix) || prefix.startsWith(it) }) {
+            if (prefix.isNotEmpty() && shown.any { matches(it, prefix) }) {
                 hits++
             }
         }
         return hits >= Tuning.SELF_DETECT_LATIN_LINES
+    }
+
+    private fun matches(shown: String, prefix: String): Boolean {
+        val overlap = when {
+            shown == prefix -> shown.length
+            shown.startsWith(prefix) -> prefix.length
+            prefix.startsWith(shown) -> shown.length
+            else -> 0
+        }
+        // Two-character OCR lines must not count as leak hits.
+        return overlap >= Tuning.SELF_DETECT_MIN_MATCH_CHARS
     }
 
     private fun prefixOf(text: String): String =

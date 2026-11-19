@@ -36,7 +36,8 @@ object ReadingOrder {
 
     fun sort(clusters: List<SpeechBubbleCluster>, source: SourceLanguage, frameHeight: Int): List<SpeechBubbleCluster> {
         val band = (frameHeight * Tuning.READING_BAND_FRACTION).coerceAtLeast(1f)
-        return if (source == SourceLanguage.JA) {
+        // Vertical ZH (Taiwan/HK manga) reads right-to-left like JA.
+        return if (source == SourceLanguage.JA || source == SourceLanguage.ZH) {
             clusters.sortedWith(
                 compareBy<SpeechBubbleCluster> { (it.unionRect.top / band).toInt() }
                     .thenByDescending { it.unionRect.right },

@@ -9,6 +9,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.ComponentName
@@ -31,7 +32,9 @@ class SerifuApp : Application() {
     override fun onCreate() {
         super.onCreate()
         settingsRepository = SettingsRepository(this, appScope)
-        bergamotModels = BergamotModelManager(this)
+        // The install scan walks filesDir; keep it off the main thread.
+        bergamotModels = BergamotModelManager(this, refreshOnInit = false)
+        appScope.launch(Dispatchers.IO) { bergamotModels.refreshInstalled() }
         checkAccessibilityService()
     }
 

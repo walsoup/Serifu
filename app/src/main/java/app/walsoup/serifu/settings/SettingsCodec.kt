@@ -48,7 +48,7 @@ internal object SettingsKeys {
     val reasoningEffort = stringPreferencesKey("reasoningEffort")
 }
 
-internal fun Settings.writeTo(prefs: MutablePreferences) {
+internal fun Settings.writeTo(prefs: MutablePreferences, encryptApiKey: (String) -> String = { it }) {
     prefs[SettingsKeys.mode] = mode.name
     prefs[SettingsKeys.sourceLanguage] = sourceLanguage.name
     prefs[SettingsKeys.targetLanguage] = targetLanguage
@@ -73,13 +73,16 @@ internal fun Settings.writeTo(prefs: MutablePreferences) {
     prefs[SettingsKeys.debugOverlay] = debugOverlay
     prefs[SettingsKeys.dynamicColor] = dynamicColor
     prefs[SettingsKeys.onboardingDone] = onboardingDone
-    prefs[SettingsKeys.aiApiKey] = aiApiKey
+    prefs[SettingsKeys.aiApiKey] = encryptApiKey(aiApiKey)
     prefs[SettingsKeys.aiModel] = aiModel
     prefs[SettingsKeys.aiEndpoint] = aiEndpoint
     prefs[SettingsKeys.reasoningEffort] = reasoningEffort.name
 }
 
-internal fun Preferences.toSettings(defaultReaders: Set<String>): Settings {
+internal fun Preferences.toSettings(
+    defaultReaders: Set<String>,
+    decryptApiKey: (String?) -> String = { it.orEmpty() },
+): Settings {
     val defaults = Settings()
     return Settings(
         mode = enumOr(this[SettingsKeys.mode], defaults.mode),
@@ -105,7 +108,7 @@ internal fun Preferences.toSettings(defaultReaders: Set<String>): Settings {
         debugOverlay = this[SettingsKeys.debugOverlay] ?: defaults.debugOverlay,
         dynamicColor = this[SettingsKeys.dynamicColor] ?: defaults.dynamicColor,
         onboardingDone = this[SettingsKeys.onboardingDone] ?: defaults.onboardingDone,
-        aiApiKey = this[SettingsKeys.aiApiKey] ?: defaults.aiApiKey,
+        aiApiKey = decryptApiKey(this[SettingsKeys.aiApiKey]).ifEmpty { defaults.aiApiKey },
         aiModel = this[SettingsKeys.aiModel] ?: defaults.aiModel,
         aiEndpoint = this[SettingsKeys.aiEndpoint] ?: defaults.aiEndpoint,
         reasoningEffort = enumOr(this[SettingsKeys.reasoningEffort], defaults.reasoningEffort),

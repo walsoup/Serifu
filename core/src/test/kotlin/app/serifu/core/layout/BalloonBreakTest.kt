@@ -32,4 +32,29 @@ class BalloonBreakTest {
             BalloonBreak.lines("hello there friend", 120f, ::widthOf),
         )
     }
+
+    @Test
+    fun balancingNeverLeavesAFunctionWordAtTheEnd() {
+        val lines = BalloonBreak.lines("go to the big market today", 120f, ::widthOf)
+        val functionWords = setOf("a", "an", "the", "to", "of", "and", "or", "but")
+        for (line in lines.dropLast(1)) {
+            val lastWord = line.trim().split(" ").last()
+            assertTrue(lastWord.lowercase() !in functionWords, "line ends on '$lastWord': $lines")
+        }
+    }
+
+    @Test
+    fun cjkPacksCharactersWithoutSpaces() {
+        val text = "おはようございます今日は"
+        val lines = BalloonBreak.lines(text, 55f, ::widthOf, cjk = true)
+        assertTrue(lines.size > 1, "expected multiple lines, got $lines")
+        assertEquals(text, lines.joinToString(""))
+        assertTrue(lines.none { ' ' in it })
+    }
+
+    @Test
+    fun cjkKeepsMidLineSpaces() {
+        val lines = BalloonBreak.lines("あ いうえお", 45f, ::widthOf, cjk = true)
+        assertEquals("あ いうえお", lines.joinToString(""))
+    }
 }

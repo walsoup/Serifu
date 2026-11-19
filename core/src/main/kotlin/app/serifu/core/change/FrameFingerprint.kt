@@ -38,6 +38,27 @@ data class FrameFingerprint(
 
     fun isSamePage(other: FrameFingerprint): Boolean = distance(other) < Tuning.SAME_PAGE_MAD
 
+    // Data-class equality would compare the cell array by identity.
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is FrameFingerprint) return false
+        return cols == other.cols && rows == other.rows &&
+            topMaskRows == other.topMaskRows && bottomMaskRows == other.bottomMaskRows &&
+            frameWidth == other.frameWidth && frameHeight == other.frameHeight &&
+            cells.contentEquals(other.cells)
+    }
+
+    override fun hashCode(): Int {
+        var result = cells.contentHashCode()
+        result = 31 * result + cols
+        result = 31 * result + rows
+        result = 31 * result + topMaskRows
+        result = 31 * result + bottomMaskRows
+        result = 31 * result + frameWidth
+        result = 31 * result + frameHeight
+        return result
+    }
+
     companion object {
         fun of(
             tiny: LumaImage,

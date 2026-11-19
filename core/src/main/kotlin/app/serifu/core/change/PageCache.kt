@@ -20,6 +20,7 @@ class PageCache<T>(private val maxSize: Int = Tuning.PAGE_CACHE_SIZE) {
         val value: T,
     )
 
+    // Thread-safe: hit from Dispatchers.Default, IO/Main upgrade jobs, and the event loop.
     private val entries = ArrayDeque<Entry<T>>()
 
     fun get(
@@ -29,7 +30,7 @@ class PageCache<T>(private val maxSize: Int = Tuning.PAGE_CACHE_SIZE) {
         target: String,
         engine: EngineId,
         variant: String? = null,
-    ): T? {
+    ): T? = synchronized(entries) {
         val index = entries.indexOfFirst { entry ->
             entry.rotation == rotation &&
                 entry.source == source &&
@@ -40,10 +41,10 @@ class PageCache<T>(private val maxSize: Int = Tuning.PAGE_CACHE_SIZE) {
                 entry.fingerprint.frameHeight == fingerprint.frameHeight &&
                 entry.fingerprint.isSamePage(fingerprint)
         }
-        if (index < 0) return null
+        if (index < 0) return@synchronized null
         val hit = entries.removeAt(index)
         entries.addFirst(hit)
-        return hit.value
+        hit.value
     }
 
     fun put(
@@ -65,7 +66,7 @@ class PageCache<T>(private val maxSize: Int = Tuning.PAGE_CACHE_SIZE) {
         engine: EngineId,
         variant: String?,
         value: T,
-    ) {
+    ) = synchronized(entries) {
         entries.removeAll {
             it.rotation == rotation && it.source == source && it.target == target &&
                 it.engine == engine && it.variant == variant &&
@@ -77,7 +78,7 @@ class PageCache<T>(private val maxSize: Int = Tuning.PAGE_CACHE_SIZE) {
         while (entries.size > maxSize) entries.removeLast()
     }
 
-    fun clear() = entries.clear()
+    fun clear() = synchronized(entries) { entries.clear() }
 
-    fun size(): Int = entries.size
+    fun size(): Int = synchronized(entries) { entries.size }
 }

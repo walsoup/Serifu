@@ -19,6 +19,9 @@ import kotlin.math.roundToInt
 
 class OcrEngine {
     private val recognizers = mutableMapOf<SourceLanguage, TextRecognizer>()
+    private val retiring = mutableListOf<TextRecognizer>()
+    private var inFlight = 0
+    private val lock = Any()
 
     suspend fun recognize(bitmap: Bitmap, language: SourceLanguage): List<OcrLine> {
         val longSide = max(bitmap.width, bitmap.height)
@@ -27,7 +30,10 @@ class OcrEngine {
         } else {
             1f
         }
-        val scaled = if (scaleDown < 1f) {
+        // ML Kit tasks are not cancellable: a cancelled coroutine must not free
+        // pixels the in-flight task still reads. Always hand it a privately owned
+        // copy, recycled only after the task completes.
+        val owned = if (scaleDown < 1f) {
             Bitmap.createScaledBitmap(
                 bitmap,
                 (bitmap.width * scaleDown).roundToInt().coerceAtLeast(1),
@@ -35,11 +41,16 @@ class OcrEngine {
                 true,
             )
         } else {
-            bitmap
+            bitmap.copy(Bitmap.Config.ARGB_8888, false) ?: bitmap
         }
         val back = if (scaleDown < 1f) 1f / scaleDown else 1f
+        val recognizer = synchronized(lock) {
+            inFlight++
+            recognizerLocked(language)
+        }
+        val task = recognizer.process(InputImage.fromBitmap(owned, 0))
         return try {
-            val text = recognizer(language).process(InputImage.fromBitmap(scaled, 0)).await()
+            val text = task.await()
             text.textBlocks.flatMap { block -> block.lines }.mapNotNull { line ->
                 val box = line.boundingBox?.let { scale(it, back) } ?: return@mapNotNull null
                 OcrLine(
@@ -54,24 +65,64 @@ class OcrEngine {
                 )
             }
         } finally {
-            if (scaled !== bitmap) scaled.recycle()
+            try {
+                if (owned !== bitmap) {
+                    if (task.isComplete) {
+                        if (!owned.isRecycled) owned.recycle()
+                    } else {
+                        task.addOnCompleteListener { if (!owned.isRecycled) owned.recycle() }
+                    }
+                }
+            } finally {
+                synchronized(lock) {
+                    inFlight--
+                    if (inFlight == 0 && retiring.isNotEmpty()) {
+                        retiring.forEach { it.close() }
+                        retiring.clear()
+                    }
+                }
+            }
         }
     }
 
     fun close() {
-        recognizers.values.forEach { it.close() }
-        recognizers.clear()
+        synchronized(lock) {
+            recognizers.values.forEach { it.close() }
+            recognizers.clear()
+            retiring.forEach { it.close() }
+            retiring.clear()
+        }
     }
 
-    private fun recognizer(language: SourceLanguage): TextRecognizer = recognizers.getOrPut(language) {
-        val options = when (language) {
-            SourceLanguage.JA -> JapaneseTextRecognizerOptions.Builder().build()
-            SourceLanguage.ZH -> ChineseTextRecognizerOptions.Builder().build()
-            SourceLanguage.KO -> KoreanTextRecognizerOptions.Builder().build()
-            else -> TextRecognizerOptions.DEFAULT_OPTIONS
+    /**
+     * Releases native recognizers without replacing this instance.
+     * PagePipeline and TranslationCoordinator hold this reference, so the
+     * instance must stay stable across memory trims; lazily rebuilt on next use.
+     * If an inference is in flight, recognizers are marked for retirement and closed
+     * as soon as the in-flight task completes, preventing mid-inference aborts.
+     */
+    fun reset() {
+        synchronized(lock) {
+            if (inFlight > 0) {
+                retiring.addAll(recognizers.values)
+                recognizers.clear()
+            } else {
+                recognizers.values.forEach { it.close() }
+                recognizers.clear()
+            }
         }
-        TextRecognition.getClient(options)
     }
+
+    private fun recognizerLocked(language: SourceLanguage): TextRecognizer =
+        recognizers.getOrPut(language) {
+            val options = when (language) {
+                SourceLanguage.JA -> JapaneseTextRecognizerOptions.Builder().build()
+                SourceLanguage.ZH -> ChineseTextRecognizerOptions.Builder().build()
+                SourceLanguage.KO -> KoreanTextRecognizerOptions.Builder().build()
+                else -> TextRecognizerOptions.DEFAULT_OPTIONS
+            }
+            TextRecognition.getClient(options)
+        }
 
     private fun scale(rect: Rect, factor: Float): IntRect {
         if (factor == 1f) return IntRect(rect.left, rect.top, rect.right, rect.bottom)

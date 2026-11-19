@@ -72,6 +72,7 @@ class BergamotModelManager(
     context: Context,
     private val fetchCatalogBody: (() -> String)? = null,
     private val fetchFileBytes: (suspend (String) -> ByteArray)? = null,
+    refreshOnInit: Boolean = true,
 ) {
     private val appContext = context.applicationContext
     private val rootDir = File(appContext.filesDir, "bergamot")
@@ -99,7 +100,7 @@ class BergamotModelManager(
 
     init {
         rootDir.mkdirs()
-        refreshInstalled()
+        if (refreshOnInit) refreshInstalled()
     }
 
     fun isOnWifi(): Boolean = onWifi()
@@ -196,7 +197,7 @@ class BergamotModelManager(
             }
             try {
                 val body = withContext(Dispatchers.IO) {
-                    withTimeout(Tuning.BERGAMOT_DOWNLOAD_TIMEOUT_MS) {
+                    withTimeout(Tuning.BERGAMOT_CATALOG_TIMEOUT_MS) {
                         fetchCatalogBody?.invoke() ?: fetchCatalogFromNetwork()
                     }
                 }
@@ -371,17 +372,29 @@ class BergamotModelManager(
         }
     }
 
-    fun deletePair(from: String, to: String, architecture: String? = null) {
-        val pairDir = File(rootDir, "${BergamotCatalog.catalogLanguage(from)}-${BergamotCatalog.catalogLanguage(to)}")
-        if (architecture == null) {
-            pairDir.deleteRecursively()
-        } else {
-            File(pairDir, architecture).deleteRecursively()
-            if (pairDir.isDirectory && pairDir.list().isNullOrEmpty()) {
-                pairDir.delete()
+    suspend fun deletePair(from: String, to: String, architecture: String? = null) =
+        withContext(Dispatchers.IO) {
+            if (architecture == null) {
+                pairDir(from, to).deleteRecursively()
+            } else {
+                // modelDir reuses the catalog sanitize + canonical-path check.
+                modelDir(from, to, architecture).deleteRecursively()
+                val pair = pairDir(from, to)
+                if (pair.isDirectory && pair.list().isNullOrEmpty()) {
+                    pair.delete()
+                }
             }
+            refreshInstalled()
         }
-        refreshInstalled()
+
+    private fun pairDir(from: String, to: String): File {
+        val safeFrom = sanitizeSegment(BergamotCatalog.catalogLanguage(from))
+        val safeTo = sanitizeSegment(BergamotCatalog.catalogLanguage(to))
+        val dir = File(rootDir, "$safeFrom-$safeTo")
+        check(dir.canonicalPath.startsWith(rootDir.canonicalPath + File.separator)) {
+            "Path traversal detected in pairDir: $safeFrom-$safeTo"
+        }
+        return dir
     }
 
     fun refreshInstalled() {
@@ -492,11 +505,17 @@ class BergamotModelManager(
         }
     }
 
-    private fun fetchCatalogFromNetwork(): String {
+    private suspend fun fetchCatalogFromNetwork(): String = withContext(Dispatchers.IO) {
         val connection = (URL(BergamotCatalog.RECORDS_URL).openConnection() as HttpURLConnection).apply {
             connectTimeout = 15_000
-            readTimeout = Tuning.BERGAMOT_DOWNLOAD_TIMEOUT_MS.toInt()
+            readTimeout = Tuning.BERGAMOT_CATALOG_TIMEOUT_MS.toInt()
             instanceFollowRedirects = true
+        }
+        val cancelHandle = coroutineContext[Job]?.invokeOnCompletion {
+            try {
+                connection.disconnect()
+            } catch (_: Throwable) {
+            }
         }
         try {
             val responseCode = connection.responseCode
@@ -505,8 +524,9 @@ class BergamotModelManager(
                     "Failed to fetch Bergamot catalog: HTTP $responseCode ${connection.responseMessage.orEmpty()}".trim(),
                 )
             }
-            return connection.inputStream.bufferedReader().use { it.readText() }
+            connection.inputStream.bufferedReader().use { it.readText() }
         } finally {
+            cancelHandle?.dispose()
             connection.disconnect()
         }
     }
@@ -660,6 +680,12 @@ class BergamotModelManager(
             readTimeout = Tuning.BERGAMOT_DOWNLOAD_TIMEOUT_MS.toInt()
             instanceFollowRedirects = true
         }
+        val cancelHandle = coroutineContext[Job]?.invokeOnCompletion {
+            try {
+                connection.disconnect()
+            } catch (_: Throwable) {
+            }
+        }
         try {
             val responseCode = connection.responseCode
             if (responseCode !in 200..299) {
@@ -688,6 +714,7 @@ class BergamotModelManager(
                 }
             }
         } finally {
+            cancelHandle?.dispose()
             connection.disconnect()
         }
     }

@@ -21,6 +21,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import java.util.Locale
 
 /**
  * Top row for secondary screens: back button, optional title, trailing actions.
@@ -98,7 +99,7 @@ fun Wordmark(text: String, modifier: Modifier = Modifier) {
 fun PageHeader(overline: String, title: String, lede: String? = null) {
     val c = Linen.colors
     Column(Modifier.padding(top = 16.dp)) {
-        Text(overline.uppercase(), style = Linen.type.overline, color = c.textSecondary)
+        Text(overline.uppercase(Locale.ROOT), style = Linen.type.overline, color = c.textSecondary)
         Spacer(Modifier.height(6.dp))
         Wordmark(title)
         if (lede != null) {
@@ -124,7 +125,7 @@ fun SectionTitle(text: String, modifier: Modifier = Modifier) {
 @Composable
 fun GroupLabel(text: String, modifier: Modifier = Modifier) {
     Text(
-        text = text.uppercase(),
+        text = text.uppercase(Locale.ROOT),
         style = Linen.type.overline,
         color = Linen.colors.muted,
         modifier = modifier.padding(top = 20.dp, bottom = 2.dp),

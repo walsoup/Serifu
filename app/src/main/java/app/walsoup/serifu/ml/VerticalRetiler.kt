@@ -46,7 +46,8 @@ class VerticalRetiler {
                 if (improved.all { it == null }) return lines
                 val byCandidate = strips.zip(improved).toMap()
                 return lines.map { line ->
-                    val strip = strips.firstOrNull { it.candidate == line }
+                    // Identity: two structurally equal lines must not share a strip.
+                    val strip = strips.firstOrNull { it.candidate === line }
                     val scored = strip?.let { byCandidate[it] }
                     if (scored != null &&
                         scored.text.isNotBlank() &&

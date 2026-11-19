@@ -49,7 +49,8 @@ object Reducer {
     }
 
     private fun onSettleElapsed(state: CoordinatorState, now: Long, config: ReducerConfig): Transition {
-        if (state.phase !is Phase.Settling) return stay(state)
+        val settling = state.phase as? Phase.Settling ?: return stay(state)
+        if (now < settling.deadline) return stay(state)
         if (config.hudVisible && config.canAuto(ignoreHud = true)) return stay(state)
         if (!config.canAuto()) {
             if (!config.readerForeground || !config.screenOn || config.mode == TriggerMode.OFF) {
@@ -92,6 +93,9 @@ object Reducer {
                 listOf(Effect.Process(event.generation, event.frameId)),
             )
         }
+        // A duplicate success for the frame already being processed must not
+        // recycle it out from under the in-flight Process.
+        if ((state.phase as? Phase.Processing)?.frameId == event.frameId) return stay(state)
         return Transition(state, listOf(Effect.RecycleFrame(event.frameId)))
     }
 
@@ -101,14 +105,17 @@ object Reducer {
         now: Long,
         config: ReducerConfig,
     ): Transition {
+        // Terminal failures obey the same generation/phase guards as the retry
+        // branch: a stale failure from a cancelled capture must not yank the new
+        // generation into Error. A real permission loss re-reports on the next attempt.
+        val awaiting = state.phase is Phase.Capturing || state.phase is Phase.Processing
+        if (!awaiting || event.generation != state.generation) return stay(state)
         if (event.failure == CaptureFailure.NO_ACCESS) {
             return failed(state, ErrorKind.PERMISSION_LOST, Effect.NotifyPermissionLost)
         }
         if (event.failure == CaptureFailure.SECURE) {
             return failed(state, ErrorKind.SECURE_WINDOW, Effect.ShowSecureTooltip)
         }
-        val awaiting = state.phase is Phase.Capturing || state.phase is Phase.Processing
-        if (!awaiting || event.generation != state.generation) return stay(state)
         val delay = retryDelay(event.failure, state.captureRetries, config) ?: return failed(
             state,
             ErrorKind.CAPTURE_FAILED,
